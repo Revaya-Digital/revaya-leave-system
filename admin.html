@@ -1,0 +1,1143 @@
+<html>
+<head>
+  <title>Revaya Leave System</title>
+
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="admin.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="supabase.js"></script>
+  <script src="reports.js"></script>
+</head>
+
+<body>
+
+<div class="admin-layout">
+
+<div class="sidebar">
+
+<div class="logo">
+Revaya <span>Admin</span>
+</div>
+
+<ul class="menu">
+
+<li data-page="dashboard" onclick="openPage('dashboard',this)">
+<i class="fa-solid fa-chart-line"></i> Dashboard
+</li>
+
+<li data-page="requests" onclick="openPage('requests',this)">
+<i class="fa-solid fa-envelope-open-text"></i> Leave Requests
+</li>
+
+<li data-page="holidays" onclick="openPage('holidays',this)">
+<i class="fa-solid fa-calendar-days"></i> Holidays
+</li>
+
+<li data-page="manual" onclick="openPage('manual',this)">
+<i class="fa-solid fa-user-check"></i> Mark Leave
+</li>
+
+<li data-page="reports" onclick="openPage('reports',this)">
+<i class="fa-solid fa-chart-pie"></i> Reports
+</li>
+
+<li onclick="logout()">
+<i class="fa-solid fa-right-from-bracket"></i> Logout
+</li>
+
+</ul>
+
+</div>
+
+<div class="main">
+
+<div class="topbar">
+
+<button class="menu-btn" onclick="toggleSidebar()">
+☰
+</button>
+
+<h2 id="pageTitle">Dashboard</h2>
+
+</div>
+
+<div id="pageContent"></div>
+
+</div>
+</div>
+
+<script>
+
+let editingHolidayId = null;
+
+function openPage(page,el){
+
+document.querySelectorAll(".menu li").forEach(li=>{
+li.classList.remove("active");
+});
+
+if(el) el.classList.add("active");
+
+const title = document.getElementById("pageTitle");
+
+if(page==="dashboard"){
+title.innerText="Dashboard";
+loadAdminDashboard();
+loadUpcomingHolidays();
+loadTeamCalendar();
+}
+
+if(page==="requests"){
+title.innerText="Leave Requests";
+renderRequestsPage();
+}
+
+if(page==="holidays"){
+title.innerText="Holiday Schedule";
+renderHolidayPage();
+}
+
+if(page==="manual"){
+title.innerText="Mark Leave";
+renderManualLeavePage();
+}
+
+if(page==="reports"){
+title.innerText="Reports";
+renderReportsPage();
+}
+
+}
+
+function toggleSidebar(){
+
+document.querySelector(".sidebar")
+.classList.toggle("open");
+
+}
+
+async function loadAdminDashboard(){
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*");
+
+let pending = leaves.filter(l => l.status === "pending").length;
+let approved = leaves.filter(l => l.status === "approved").length;
+let rejected = leaves.filter(l => l.status === "rejected").length;
+
+const html = `
+<div class="dashboard-grid">
+
+<div class="dash-card">
+Pending Requests
+<h2>${pending}</h2>
+</div>
+
+<div class="dash-card">
+Approved Leaves
+<h2>${approved}</h2>
+</div>
+
+<div class="dash-card">
+Rejected Requests
+<h2>${rejected}</h2>
+</div>
+
+</div>
+
+<div class="card upcoming-holidays">
+  <h3>Upcoming Holidays</h3>
+  <div id="holidayList"></div>
+</div>
+
+<h3>Employees On Leave Today</h3>
+
+<table id="todayLeaveTable">
+
+<thead>
+<tr>
+<th>Employee</th>
+<th>Leave Type</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+<div class="card team-calendar">
+<h3>Team Leave Calendar</h3>
+<div id="teamCalendar"></div>
+</div>
+`;
+
+document.getElementById("pageContent").innerHTML = html;
+loadTodayLeaves();
+}
+
+async function renderHolidayPage(){
+
+const html = `
+<div id="holidaysPage" class="admin-page">
+
+<h2>Holiday Schedule</h2>
+
+<div class="card">
+
+<h3>Add Holiday</h3>
+
+<input type="text" id="holidayName" placeholder="Holiday Name">
+
+<input type="date" id="holidayDate">
+
+<button onclick="addHoliday()">Add Holiday</button>
+
+</div>
+
+<div class="card">
+
+<h3>Holiday List</h3>
+
+<table id="holidayTable">
+
+<thead>
+<tr>
+<th>Name</th>
+<th>Date</th>
+<th>Action</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+
+</div>
+
+</div>
+`
+
+document.getElementById("pageContent").innerHTML = html;
+loadHolidays();
+}
+
+async function loadHolidays(){
+
+const { data } = await db
+.from("holidays")
+.select("*")
+.order("holiday_date",{ascending:true})
+
+const body = document.querySelector("#holidayTable tbody")
+
+body.innerHTML=""
+
+data.forEach(h=>{
+
+body.innerHTML += `
+
+<tr>
+<td>${h.name}</td>
+<td>${h.holiday_date}</td>
+
+<td>
+
+<button class="edit-btn" onclick="editHoliday('${h.id}','${h.name}','${h.holiday_date}')">
+Edit
+</button>
+
+<button class="delete-btn" onclick="deleteHoliday('${h.id}')">
+Delete
+</button>
+
+</td>
+
+</tr>
+
+`
+
+})
+
+}
+
+async function addHoliday(){
+
+const name = document.getElementById("holidayName").value
+const date = document.getElementById("holidayDate").value
+
+if(!name || !date){
+alert("Enter holiday name and date")
+return
+}
+
+if(editingHolidayId){
+
+const { error } = await db
+.from("holidays")
+.update({
+name:name,
+holiday_date:date
+})
+.eq("id",editingHolidayId)
+
+if(error){
+alert(error.message)
+return
+}
+
+editingHolidayId = null
+document.querySelector("#holidaysPage button").innerText = "Add Holiday"
+
+}
+else{
+
+const { error } = await db
+.from("holidays")
+.insert({
+name:name,
+holiday_date:date
+})
+
+if(error){
+alert(error.message)
+return
+}
+
+}
+
+document.getElementById("holidayName").value=""
+document.getElementById("holidayDate").value=""
+
+loadHolidays()
+
+}
+
+function editHoliday(id,name,date){
+
+editingHolidayId = id;
+
+document.getElementById("holidayName").value = name;
+document.getElementById("holidayDate").value = date;
+
+document.querySelector("#holidaysPage button").innerText = "Update Holiday";
+
+}
+
+async function deleteHoliday(id){
+
+if(!confirm("Delete this holiday?")) return
+
+await db
+.from("holidays")
+.delete()
+.eq("id",id)
+
+loadHolidays()
+
+}
+
+async function renderManualLeavePage(){
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name")
+.order("name");
+
+let options="";
+
+employees.forEach(e=>{
+options += `<option value="${e.auth_user_id}">${e.name}</option>`;
+});
+
+document.getElementById("pageContent").innerHTML = `
+
+<div class="card">
+
+<h3>Mark Leave For Employee</h3>
+
+<label>Employee</label>
+<select id="empSelect">
+${options}
+</select>
+
+<label>Leave Type</label>
+<select id="leaveType"></select>
+
+<label>Start Date</label>
+<input type="date" id="startDate">
+
+<label>End Date</label>
+<input type="date" id="endDate">
+
+<button onclick="adminApplyLeave()">Submit</button>
+
+</div>
+
+`;
+
+loadLeaveTypes();
+}
+
+async function loadLeaveTypes(){
+
+const { data } = await db
+.from("leave_types")
+.select("id,name")
+.order("name");
+
+const dropdown = document.getElementById("leaveType");
+
+dropdown.innerHTML="";
+
+data.forEach(type=>{
+dropdown.innerHTML += `<option value="${type.id}">${type.name}</option>`;
+});
+
+}
+
+async function adminApplyLeave(){
+
+const emp = document.getElementById("empSelect").value;
+const type = document.getElementById("leaveType").value;
+const start = document.getElementById("startDate").value;
+const end = document.getElementById("endDate").value;
+
+if(!emp || !type || !start || !end){
+alert("Please fill all fields");
+return;
+}
+
+const startDate = new Date(start);
+const endDate = new Date(end);
+
+const diffTime = Math.abs(endDate - startDate);
+const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+const { error } = await db
+.from("leave_requests")
+.insert({
+employee_id: emp,
+type_id: type,
+start_date: start,
+end_date: end,
+days: days,
+status: "approved",
+is_pto: true
+});
+
+if(error){
+showToast(error.message,"error");
+return;
+}
+
+showToast("Leave approved & email sent","success");
+
+renderRequestsPage();
+
+}
+
+async function loadUpcomingHolidays(){
+
+const today = new Date().toISOString().split("T")[0]
+
+const { data, erro } = await db
+.from("holidays")
+.select("*")
+.gte("holiday_date",today)
+.order("holiday_date",{ascending:true})
+.limit(5)
+
+const container = document.getElementById("holidayList")
+
+if(!container) return
+
+container.innerHTML=""
+
+data.forEach(h=>{
+
+container.innerHTML += `
+<div class="holiday-item">
+<div class="holiday-name">${h.name}</div>
+<div class="holiday-date">${h.holiday_date}</div>
+</div>
+`
+})
+}
+
+async function loadTodayLeaves(){
+
+const today = new Date().toISOString().split("T")[0]
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*")
+.eq("status","approved")
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name")
+
+const { data: types } = await db
+.from("leave_types")
+.select("id,name")
+
+const typeMap={}
+types.forEach(t=>typeMap[t.id]=t.name)
+
+const empMap={}
+employees.forEach(e=>empMap[e.auth_user_id]=e.name)
+
+const body = document.querySelector("#todayLeaveTable tbody")
+
+body.innerHTML=""
+
+leaves.forEach(l=>{
+
+if(today>=l.start_date && today<=l.end_date){
+
+body.innerHTML+=`
+<tr>
+<td>${empMap[l.employee_id]}</td>
+<td>${typeMap[l.type_id]}</td>
+<td>Approved</td>
+</tr>
+`
+
+}
+
+})
+
+}
+
+async function loadTeamCalendar(){
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*")
+.eq("status","approved")
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name")
+
+const today = new Date()
+
+let days=[]
+
+for(let i=0;i<7;i++){
+
+let d = new Date()
+d.setDate(today.getDate()+i)
+
+days.push(d.toISOString().split("T")[0])
+
+}
+
+const container=document.getElementById("teamCalendar")
+
+container.innerHTML=""
+
+let html=`<div class="calendar-grid">`
+
+html+=`<div></div>`
+
+days.forEach(d=>{
+html+=`<div class="calendar-header">${d.slice(5)}</div>`
+})
+
+employees.forEach(emp=>{
+
+html+=`<div class="calendar-name">${emp.name}</div>`
+
+days.forEach(day=>{
+
+let onLeave=false
+
+leaves.forEach(l=>{
+
+if(
+l.employee_id===emp.auth_user_id &&
+day>=l.start_date &&
+day<=l.end_date
+){
+onLeave=true
+}
+
+})
+
+html+=`
+<div class="calendar-day ${onLeave?"calendar-leave":""}">
+${onLeave?"L":""}
+</div>
+`
+
+})
+
+})
+
+html+=`</div>`
+
+container.innerHTML=html
+
+}
+
+async function loadRequests(){
+
+const selectedStatus = document.getElementById("statusFilter").value;
+const selectedEmployee = document.getElementById("employeeFilter").value;
+const fromDate = document.getElementById("fromDate").value;
+const toDate = document.getElementById("toDate").value;
+const selectedType = document.getElementById("typeFilter").value;
+const ptoFilter = document.getElementById("ptoFilter").value;
+
+let query = db
+.from("leave_requests")
+.select("*")
+.order("created_at",{ascending:false});
+
+if(selectedStatus !== "all"){
+query = query.eq("status",selectedStatus);
+}
+
+if(selectedEmployee !== "all"){
+query = query.eq("employee_id",selectedEmployee);
+}
+
+if(fromDate){
+query = query.gte("start_date",fromDate);
+}
+
+if(toDate){
+query = query.lte("end_date",toDate);
+}
+
+if(selectedType !== "all"){
+query = query.eq("type_id",selectedType);
+}
+
+if(ptoFilter === "paid"){
+query = query.eq("is_pto",true);
+}
+
+if(ptoFilter === "unpaid"){
+query = query.eq("is_pto",false);
+}
+
+const { data: requests } = await query;
+
+const { data: approvedLeaves } = await db
+.from("leave_requests")
+.select("employee_id,type_id,days,start_date")
+.eq("status","approved");
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name");
+
+const { data: types } = await db
+.from("leave_types")
+.select("id,name,yearly_quota");
+
+const empMap = {};
+employees.forEach(e => empMap[e.auth_user_id] = e.name);
+
+const typeMap = {};
+types.forEach(t => typeMap[t.id] = t.name);
+
+const usedMap = {};
+approvedLeaves.forEach(l=>{
+const year = new Date(l.start_date).getFullYear();
+const key = l.employee_id+"*"+l.type_id+"*"+year;
+
+if(!usedMap[key]) usedMap[key]=0;
+usedMap[key]+=l.days;
+});
+
+const quotaMap = {};
+types.forEach(t=>{
+quotaMap[t.id] = t.yearly_quota;
+});
+
+const body = document.querySelector("#reqTable tbody");
+body.innerHTML="";
+
+requests.forEach(r=>{
+
+const year = new Date(r.start_date).getFullYear();
+const key = r.employee_id+"*"+r.type_id+"*"+year;
+
+const used = usedMap[key] || 0;
+const quota = quotaMap[r.type_id] || 0;
+const remaining = quota - used;
+
+/* balance badge */
+let badgeClass = "badge-good";
+
+if(remaining < (quota * 0.25)) badgeClass = "badge-pending";
+if(remaining <= 0) badgeClass = "badge-bad";
+if(remaining < 0) badgeClass = "badge-bad";
+
+let balanceBadge = `<span class="badge ${badgeClass}">${remaining}</span>`;
+
+const actionButtons =
+r.status === "pending"
+? `<button onclick="approve('${r.id}')">Approve</button>        <button onclick="reject('${r.id}')">Reject</button>`
+: r.status === "approved"
+? `<button onclick="adminCancel('${r.id}')">Cancel</button>`
+: `<span>-</span>`;
+
+body.innerHTML+=`
+
+<tr>
+<td>${empMap[r.employee_id] || "Unknown"}</td>
+<td>${typeMap[r.type_id]}</td>
+<td>
+${r.status === "pending"
+  ? `
+    <label>
+      <input type="radio" name="pto_${r.id}" value="true" ${r.is_pto ? "checked" : ""}> Paid
+    </label>
+    <label>
+      <input type="radio" name="pto_${r.id}" value="false" ${!r.is_pto ? "checked" : ""}> Unpaid
+    </label>
+  `
+  : `
+    <span class="badge ${r.is_pto ? "badge-good" : "badge-bad"}">
+      ${r.is_pto ? "Paid" : "Unpaid"}
+    </span>
+  `
+}
+</td>
+<td>${r.start_date}</td>
+<td>${r.end_date}</td>
+<td>${r.days}</td>
+<td>${r.is_half_day? `Half Day (${r.half_day_session})`: `${r.days} Day(s)`}</td>
+<td>${r.admin_comment || "-"}</td>
+<td>${balanceBadge}</td>
+<td>
+  <span class="center badge ${r.status === "approved" ? "badge-good": r.status === "pending" ? "badge-pending": r.status === "cancel_requested" ? "badge-pending": "badge-bad"}">
+    ${r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+  </span>
+</td>
+<td>
+  <textarea id="c_${r.id}" placeholder="Write new comment..."></textarea>
+  <br>
+  ${actionButtons}
+</td>
+</tr>`;
+});
+}
+
+function renderRequestsPage(){
+
+document.getElementById("pageContent").innerHTML = `
+
+<div class="filters-bar">
+<div class="filters">
+
+<select id="statusFilter" onchange="loadRequests()">
+<option value="all">All</option>
+<option value="pending">Pending</option>
+<option value="approved">Approved</option>
+<option value="rejected">Rejected</option>
+<option value="cancelled">Cancelled</option>
+</select>
+
+<select id="employeeFilter" onchange="loadRequests()">
+<option value="all">All Employees</option>
+</select>
+
+<input type="date" id="fromDate" onchange="loadRequests()">
+
+<input type="date" id="toDate" onchange="loadRequests()">
+
+<select id="typeFilter" onchange="loadRequests()">
+<option value="all">All Types</option>
+</select>
+
+<select id="ptoFilter" onchange="loadRequests()">
+<option value="all">All</option>
+<option value="paid">Paid</option>
+<option value="unpaid">Unpaid</option>
+</select>
+
+<input
+type="text"
+id="tableSearch"
+placeholder="Search Table..."
+onkeyup="filterTable()"
+>
+
+</div>
+</div>
+
+<div class="table-container">
+<table id="reqTable">
+
+<thead>
+
+<tr>
+<th>Employee</th>
+<th>Type</th>
+<th>PTO</th>
+<th>Start</th>
+<th>End</th>
+<th>Days</th>
+<th>Duration</th>
+<th>Comment</th>
+<th>Balance</th>
+<th>Status</th>
+<th>Action</th>
+</tr>
+
+</thead>
+
+<tbody></tbody>
+
+</table>
+</div>
+`;
+
+loadEmployeeFilter();
+loadTypeFilter();
+loadRequests();
+
+}
+
+async function approve(id){
+
+const { data: leave } = await db
+.from("leave_requests")
+.select("*")
+.eq("id",id)
+.single();
+
+const { data: emp } = await db
+.from("employees")
+.select("email,name,phone")
+.eq("auth_user_id",leave.employee_id)
+.single();
+
+const commentBox = document.getElementById("c_"+id);
+const ptoSelect = document.querySelector(`input[name="pto_${id}"]:checked`);
+
+const { data: old } = await db
+.from("leave_requests")
+.select("is_pto, admin_comment")
+.eq("id",id)
+.single();
+
+const oldPTO = old.is_pto === true;
+const newPTO = ptoSelect && ptoSelect.value === "true";
+
+let finalComment = old.admin_comment || "";
+const newComment = commentBox.value || "";
+
+if(newComment){
+finalComment += (finalComment ? " | " : "") + newComment;
+}
+
+if(oldPTO !== newPTO){
+finalComment += (finalComment ? " | " : "") + "PTO changed by admin";
+}
+
+const { error } = await db.from("leave_requests")
+.update({
+status:"approved",
+is_pto:newPTO,
+admin_comment:finalComment
+})
+.eq("id",id);
+
+/* 🔔 EMAIL TRIGGER */
+try{
+const res = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer " + SUPABASE_ANON_KEY,
+"apikey": SUPABASE_ANON_KEY
+},
+body: JSON.stringify({
+to: emp.email,
+subject: "Leave Approved",
+message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been approved.`
+})
+});
+}catch(e){
+showToast("System Error. Admin not Notified","error");
+}
+
+/* 📱 WHATSAPP TRIGGER */
+try{
+const wa = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-whatsapp",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer " + SUPABASE_ANON_KEY,
+"apikey": SUPABASE_ANON_KEY
+},
+body: JSON.stringify({
+phone: emp.phone,
+message: `Leave Approved
+From: ${leave.start_date}
+To: ${leave.end_date}`
+})
+});
+}catch(e){
+showToast("System Error. Admin not Notified","error");
+}
+
+if(error){
+showToast(error.message,"error");
+return;
+}
+
+showToast("Leave approved & email sent","success");
+loadRequests();
+}
+
+async function reject(id){
+
+const commentBox = document.getElementById("c_"+id);
+
+/* get old comment */
+const { data: old } = await db
+.from("leave_requests")
+.select("admin_comment")
+.eq("id",id)
+.single();
+
+let finalComment = old.admin_comment || "";
+const newComment = commentBox.value || "";
+
+if(newComment){
+finalComment += (finalComment ? " | " : "") + newComment;
+}
+
+const { error } = await db.from("leave_requests")
+.update({
+status:"rejected",
+admin_comment:finalComment
+})
+.eq("id",id);
+
+/* 🔔 EMAIL TRIGGER */
+try{
+const res = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
+method:"POST",
+headers:{
+"Content-Type":"application/json",
+"Authorization":"Bearer " + SUPABASE_ANON_KEY,
+"apikey": SUPABASE_ANON_KEY
+},
+body: JSON.stringify({
+to: emp.email,
+subject: "Leave Rejected",
+message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been rejected.`
+})
+});
+}catch(e){
+showToast("System Error. Admin not Notified","error");
+}
+
+/* 📱 WHATSAPP TRIGGER */
+await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-whatsapp",{
+  method:"POST",
+  headers:{
+    "Content-Type":"application/json",
+    "Authorization":"Bearer " + SUPABASE_ANON_KEY,
+    "apikey": SUPABASE_ANON_KEY
+  },
+  body: JSON.stringify({
+    phone: emp.phone,
+    message: `Leave Rejected\n\nFrom: ${leave.start_date}\nTo: ${leave.end_date}\nStatus: Approved`
+  })
+});
+if(error){
+showToast("System Error. Admin not Notified","error");
+return;
+}
+
+showToast("Leave Rejected","success");
+loadRequests();
+}
+
+async function renderReportsPage(){
+
+document.getElementById("pageContent").innerHTML = `
+
+<div class="reports-container">
+
+<div class="reports-header">
+
+<h3>Reports Dashboard</h3>
+
+<div class="report-filters">
+
+<select id="rangeFilter" onchange="loadReports()">
+<option value="month">This Month</option>
+<option value="year">This Year</option>
+<option value="custom">Custom</option>
+</select>
+
+<input type="date" id="reportFrom" onchange="loadReports()">
+<input type="date" id="reportTo" onchange="loadReports()">
+
+<button onclick="exportCSV()">Export CSV</button>
+
+</div>
+
+</div>
+
+<div class="stats-grid" id="statsCards"></div>
+
+<div class="chart-grid">
+
+<div class="chart-box">
+<canvas id="trendChart"></canvas>
+</div>
+
+<div class="chart-box">
+<canvas id="typeChart"></canvas>
+</div>
+
+<div class="chart-box">
+<canvas id="utilGauge"></canvas>
+</div>
+
+</div>
+
+<h4>Daily Leave Heatmap</h4>
+<div id="leaveHeatmap" class="heatmap-grid"></div>
+
+<h4>Employee Leave Level</h4>
+<table id="typeReport">
+<thead>
+<tr>
+<th>Leave Type</th>
+<th>Total Days</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+<table id="empReport">
+<thead>
+<tr>
+<th>Employee</th>
+<th>Leave Days</th>
+<th>Level</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+
+</div>
+
+`;
+
+setTimeout(()=>{
+loadReports();
+},50);
+
+}
+
+async function logout(){
+  await db.auth.signOut();
+  window.location="index.html";
+}
+
+async function adminCancel(id){
+
+const commentBox = document.getElementById("c_"+id);
+
+/* get old comment */
+const { data: old } = await db
+.from("leave_requests")
+.select("admin_comment")
+.eq("id",id)
+.single();
+
+let finalComment = old.admin_comment || "";
+const newComment = commentBox.value || "";
+
+if(newComment){
+finalComment += (finalComment ? " | " : "") + newComment;
+}
+
+const { error } = await db.from("leave_requests")
+.update({
+status:"cancelled",
+admin_comment:finalComment
+})
+.eq("id",id);
+
+if(error){
+showToast(error.message,"error");
+return;
+}
+
+showToast("Leave Cancelled","success");
+loadRequests();
+}
+
+async function loadEmployeeFilter(){
+const { data } = await db
+.from("employees")
+.select("auth_user_id,name")
+.order("name");
+
+const dropdown = document.getElementById("employeeFilter");
+
+data.forEach(emp=>{
+dropdown.innerHTML += `<option value="${emp.auth_user_id}">${emp.name}</option>`;
+});
+}
+
+async function loadTypeFilter(){
+
+const { data } = await db
+.from("leave_types")
+.select("id,name")
+.order("name");
+
+const dropdown = document.getElementById("typeFilter");
+
+data.forEach(type=>{
+dropdown.innerHTML += `<option value="${type.id}">${type.name}</option>`;
+});
+}
+
+function filterTable(){
+
+const input = document
+.getElementById("tableSearch")
+.value
+.toLowerCase();
+
+const rows = document
+.querySelectorAll("#reqTable tbody tr");
+
+rows.forEach(row=>{
+
+const text = row.innerText.toLowerCase();
+
+row.style.display =
+text.includes(input) ? "" : "none";
+
+});
+
+}
+
+openPage("dashboard");
+</script>
+
+<div id="toastContainer"></div>
+</body>
+</html>

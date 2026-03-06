@@ -1,0 +1,296 @@
+body{
+margin:0;
+font-family:Arial, Helvetica, sans-serif;
+background:linear-gradient(135deg,#2563eb,#1e3a8a,#1e40af);
+background-size:300% 300%;
+animation:gradientMove 10s ease infinite;
+height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+@keyframes gradientMove{
+0%{background-position:0% 50%}
+50%{background-position:100% 50%}
+100%{background-position:0% 50%}
+}
+
+.login-container{
+background:white;
+padding:40px;
+border-radius:14px;
+width:100%;
+max-width:380px;
+box-shadow:
+0 10px 30px rgba(0,0,0,0.15),
+0 1px 2px rgba(0,0,0,0.05);
+animation:cardEnter 0.6s ease;
+}
+
+@keyframes cardEnter{
+from{
+opacity:0;
+transform:translateY(20px);
+}
+to{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+/* .login-container h2{
+margin-top:0;
+text-align:center;
+margin-bottom:25px;
+color:#111827;
+} */
+
+.field{
+position:relative;
+margin-bottom:20px;
+}
+
+.field input{
+width:100%;
+padding:14px;
+border:1px solid #d1d5db;
+border-radius:8px;
+font-size:14px;
+outline:none;
+transition:0.2s;
+}
+
+.field label{
+position:absolute;
+left:12px;
+top:50%;
+transform:translateY(-50%);
+background:white;
+padding:0 4px;
+color:#6b7280;
+font-size:14px;
+pointer-events:none;
+transition:0.2s;
+}
+
+.phone-field label{
+left:85px;
+}
+
+.field input:focus{
+border-color:#2563eb;
+box-shadow:0 0 0 3px rgba(37,99,235,0.15);
+}
+
+.field input:focus + label,
+.field input:not(:placeholder-shown) + label,
+.phone-field:focus-within label{
+top:-8px;
+font-size:12px;
+color:#2563eb;
+}
+
+.password-wrapper{
+position:relative;
+}
+
+.toggle-password{
+position:absolute;
+right:12px;
+top:50%;
+transform:translateY(-50%);
+cursor:pointer;
+font-size:16px;
+color:#6b7280;
+}
+
+.toggle-password:hover{
+color:#111827;
+}
+
+button{
+width:100%;
+padding:12px;
+border:none;
+background:#2563eb;
+color:white;
+font-weight:600;
+border-radius:8px;
+cursor:pointer;
+transition:0.2s;
+}
+
+button:hover{
+background:#1e40af;
+transform:translateY(-1px);
+box-shadow:0 6px 14px rgba(0,0,0,0.15);
+}
+
+.create-btn{
+background:#10b981;
+margin-top:10px;
+}
+
+.create-btn:hover{
+background:#047857;
+}
+
+button.loading{
+background:#9ca3af;
+cursor:not-allowed;
+}
+
+.spinner{
+width:16px;
+height:16px;
+border:2px solid #fff;
+border-top:2px solid transparent;
+border-radius:50%;
+display:inline-block;
+animation:spin 0.6s linear infinite;
+margin-left:8px;
+vertical-align:middle;
+}
+
+@keyframes spin{
+0%{transform:rotate(0deg)}
+100%{transform:rotate(360deg)}
+}
+
+.error-message{
+color:#dc2626;
+font-size:13px;
+margin-top:6px;
+}
+
+.signup-btn{
+width:100%;
+padding:12px;
+border:2px solid #2563eb;
+background:white;
+color:#2563eb;
+font-weight:600;
+border-radius:8px;
+cursor:pointer;
+margin-top:12px;
+transition:0.2s;
+}
+
+.signup-btn:hover{
+background:#2563eb;
+color:white;
+}
+
+.register-btn{
+width:100%;
+padding:12px;
+border:none;
+background:#10b981;
+color:white;
+font-weight:600;
+border-radius:8px;
+cursor:pointer;
+margin-top:10px;
+transition:0.2s;
+}
+
+.register-btn:hover{
+background:#047857;
+}
+
+#signupBox{
+margin-top:20px;
+padding-top:20px;
+border-top:1px solid #e5e7eb;
+animation:fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn{
+from{
+opacity:0;
+transform:translateY(10px);
+}
+to{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+.strength-bar{
+height:6px;
+width:100%;
+background:#e5e7eb;
+border-radius:4px;
+margin-top:6px;
+overflow:hidden;
+}
+
+#strengthFill{
+height:100%;
+width:0%;
+transition:0.3s;
+}
+
+.strength-text{
+font-size:12px;
+margin-top:4px;
+}
+
+.hero-header{
+text-align:center;
+margin-bottom:30px;
+}
+
+.logo-box{
+text-align:center;
+margin-bottom:10px;
+}
+
+.logo-box img{
+height:120px;
+width:auto;
+margin-bottom:10px;
+transition:0.4s;
+}
+
+.logo-box img:hover{
+transform:scale(1.05);
+}
+
+.brand-title{
+font-size:30px;
+font-weight:700;
+text-align:center;
+color:#111827;
+}
+
+#typingText{
+color:#2563eb;
+border-right:2px solid #2563eb;
+padding-right:5px;
+animation:blinkCursor 0.8s infinite;
+}
+
+@keyframes blinkCursor{
+0%{border-color:#2563eb}
+50%{border-color:transparent}
+100%{border-color:#2563eb}
+}
+
+.brand-title span{
+background:linear-gradient(90deg,#2563eb,#4f46e5);
+-webkit-background-clip:text;
+-webkit-text-fill-color:transparent;
+font-weight:700;
+}
+
+.brand-subtitle{
+margin-top:6px;
+font-size:14px;
+color:#6b7280;
+}
+
+.field input:hover{
+border-color:#9ca3af;
+}

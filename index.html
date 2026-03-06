@@ -1,0 +1,337 @@
+<head>
+  <title>Revaya Leave System</title>
+  
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="index.css">
+
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.10/build/css/intlTelInput.css">
+  <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.10/build/js/intlTelInput.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+</head>
+
+<div class="login-container">
+
+<div class="hero-header">
+
+<div class="logo-box">
+<img src="Revaya_Logo_Transparent.png" alt="Revaya Digital Logo">
+</div>
+
+<h1 class="brand-title">
+Revaya <span id="typingText"></span>
+</h1>
+
+<p class="brand-subtitle">
+Employee Leave Management Portal
+</p>
+
+</div>
+
+<form onsubmit="login(event)">
+
+<div class="field">
+<input id="email" type="email" placeholder=" " required>
+<label>Email</label>
+</div>
+
+<div class="field password-wrapper">
+<input id="password" type="password" placeholder=" " required>
+<label>Password</label>
+<span class="toggle-password" onclick="togglePassword()">👁</span>
+</div>
+
+<div id="errorMsg" class="error-message"></div>
+
+<button id="loginBtn" type="submit">Login</button>
+<div style="text-align:right;margin-top:8px;">
+<a href="#" onclick="resetPassword()">Forgot Password?</a>
+</div>
+</form>
+
+
+<button class="signup-btn" onclick="showSignup()">Create Account</button>
+
+<div class="field" id="signupBox" style="display:none;">
+<h3>Create Account</h3>
+<div class="field">
+<input id="name" type="text" placeholder=" " required>
+<label>Full Name</label>
+</div>
+
+<div class="field phone-field">
+<input id="phone" type="tel" placeholder=" " required>
+<label>Phone Number</label>
+</div>
+
+<div class="field">
+<input id="newEmail" type="email" placeholder=" " oninput="validateEmail()" required>
+<label>Email</label>
+<div id="emailError" class="error-message"></div>
+</div>
+
+<div class="field password-wrapper">
+<input id="newPassword" type="password" placeholder=" " oninput="checkPasswordStrength()" required>
+<label>Password</label>
+<span class="toggle-password" onclick="toggleSignupPassword()">👁</span>
+</div>
+<div class="strength-bar">
+<div id="strengthFill"></div></div>
+<div id="strengthText" class="strength-text"></div>
+
+<button class="register-btn" onclick="signup()">Register</button>
+</div>
+
+<div id="signupError" class="error-message"></div>
+</div>
+
+
+<script>
+async function login(event) {
+
+event.preventDefault();
+
+const btn = document.getElementById("loginBtn");
+const errorBox = document.getElementById("errorMsg");
+
+errorBox.innerText="";
+
+btn.disabled=true;
+btn.classList.add("loading");
+btn.innerHTML="Logging in <span class='spinner'></span>";
+
+const { data, error } = await db.auth.signInWithPassword({
+email: document.getElementById("email").value,
+password: document.getElementById("password").value
+});
+
+if(error){
+
+btn.disabled=false;
+btn.classList.remove("loading");
+btn.innerHTML="Login";
+
+errorBox.innerText=error.message;
+return;
+}
+
+showToast("Login Successful","success");
+const { data: userData } = await db.auth.getUser();
+
+const { data: emp } = await db
+.from("employees")
+.select("role")
+.eq("auth_user_id", userData.user.id)
+.single();
+
+if(emp.role === "admin"){
+window.location = "admin.html";
+} else {
+window.location = "employee.html";
+}
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+
+const phoneInput = document.querySelector("#phone");
+
+window.iti = window.intlTelInput(phoneInput,{
+initialCountry:"pk",
+preferredCountries:["pk","ae","sa","us","gb"],
+separateDialCode:true,
+utilsScript:"https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.10/build/js/utils.js"
+});
+
+const text = "Digital";
+let index = 0;
+let isDeleting = false;
+
+function typeEffect(){
+
+const elementes = document.getElementById("typingText");
+if(!elementes) return;
+
+let speed = 120;
+
+if(!isDeleting){
+
+elementes.innerText = text.substring(0,index);
+index++;
+
+if(index > text.length){
+isDeleting = true;
+speed = 1500;
+}
+
+}else{
+
+elementes.innerText = text.substring(0,index);
+index--;
+
+if(index < 0){
+isDeleting = false;
+speed = 600;
+}
+
+}
+
+setTimeout(typeEffect, speed);
+
+}
+
+typeEffect();
+
+});
+
+function togglePassword(){
+
+const input=document.getElementById("password");
+
+if(input.type==="password"){
+input.type="text";
+}else{
+input.type="password";
+}
+
+}
+
+function toggleSignupPassword(){
+
+const input = document.getElementById("newPassword");
+
+if(input.type === "password"){
+input.type = "text";
+}else{
+input.type = "password";
+}
+
+}
+
+function showSignup(){
+signupBox.style.display = "block";
+}
+
+async function signup(){
+
+const phone = document.getElementById("phone").value.trim();
+
+const fullPhone = iti.getNumber();
+
+if(!iti.isValidNumber()){
+errorBox.innerText="Enter valid phone number";
+return;
+}
+
+const { data, error } = await db.auth.signUp({
+email: newEmail.value,
+password: newPassword.value,
+options:{
+data:{
+name: name.value,
+phone: fullPhone
+}
+}
+});
+
+if(error){
+errorBox.innerText = error.message;
+return;
+}
+
+/* insert into employees table */
+
+await db.from("employees").insert({
+name: name.value,
+email: newEmail.value,
+phone: fullPhone,
+auth_user_id: data.user.id,
+role: "employee"
+});
+
+showToast("Account created. Please Verify Email","success");
+
+}
+function validateEmail(){
+
+const email = document.getElementById("newEmail").value;
+const errorBox = document.getElementById("emailError");
+
+const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+if(!regex.test(email)){
+errorBox.innerText = "Enter a valid email address";
+}else{
+errorBox.innerText = "";
+}
+
+}
+
+function checkPasswordStrength(){
+
+const password = document.getElementById("newPassword").value;
+const bar = document.getElementById("strengthFill");
+const text = document.getElementById("strengthText");
+
+let strength = 0;
+
+if(password.length >= 6) strength++;
+if(/[A-Z]/.test(password)) strength++;
+if(/[0-9]/.test(password)) strength++;
+if(/[^A-Za-z0-9]/.test(password)) strength++;
+
+if(strength === 1){
+bar.style.width="25%";
+bar.style.background="#ef4444";
+text.innerText="Weak password";
+}
+
+else if(strength === 2){
+bar.style.width="50%";
+bar.style.background="#f59e0b";
+text.innerText="Moderate password";
+}
+
+else if(strength === 3){
+bar.style.width="75%";
+bar.style.background="#3b82f6";
+text.innerText="Strong password";
+}
+
+else if(strength === 4){
+bar.style.width="100%";
+bar.style.background="#10b981";
+text.innerText="Very strong password";
+}
+
+else{
+bar.style.width="0%";
+text.innerText="";
+}
+
+}
+
+async function resetPassword(){
+
+const email = document.getElementById("email").value;
+
+if(!email){
+showToast("Enter your email first","error");
+return;
+}
+
+const { error } = await db.auth.resetPasswordForEmail(email,{
+redirectTo: window.location.origin + "https://revaya-leave-management.vercel.app/reset.html"
+});
+
+if(error){
+showToast(error.message,"error");
+return;
+}
+
+showToast("Password reset link sent to email","success");
+
+}
+</script>
+
+<div id="toastContainer"></div>
