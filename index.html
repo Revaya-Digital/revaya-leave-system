@@ -214,35 +214,35 @@ signupBox.style.display = "block";
 
 async function signup(){
 
-const errorBox = document.getElementById("signupError")
+// const errorBox = document.getElementById("signupError")
 
-const phone = document.getElementById("phone").value.trim()
-const fullPhone = iti.getNumber()
+// const phone = document.getElementById("phone").value.trim()
+// const fullPhone = iti.getNumber()
 
-if(!iti.isValidNumber()){
-errorBox.innerText="Enter valid phone number"
-return
-}
+// if(!iti.isValidNumber()){
+// errorBox.innerText="Enter valid phone number"
+// return
+// }
 
 const { data, error } = await db.auth.signUp({
 
 email: newEmail.value,
 password: newPassword.value,
 
-options:{
-emailRedirectTo: window.location.origin + "/auth-callback.html",
-data:{
-name: name.value,
-phone: fullPhone
-}
-}
+// options:{
+// emailRedirectTo: window.location.origin + "/auth-callback.html",
+// data:{
+// name: name.value,
+// phone: fullPhone
+// }
+// }
 
-})
+// })
 
-if(error){
-errorBox.innerText = error.message
-return
-}
+// if(error){
+// errorBox.innerText = error.message
+// return
+// }
 
 // /* wait until supabase returns user */
 
