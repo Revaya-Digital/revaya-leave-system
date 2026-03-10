@@ -1,0 +1,52 @@
+<html>
+<head>
+<title>Authenticating</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+
+</head>
+
+<body>
+
+<h3>Signing you in...</h3>
+
+<script>
+
+async function handleAuth(){
+
+const { data, error } = await db.auth.getSession()
+
+if(error){
+console.log(error)
+}
+
+const { data:userData } = await db.auth.getUser()
+
+if(!userData.user){
+window.location="index.html"
+return
+}
+
+/* check role */
+
+const { data: emp } = await db
+.from("employees")
+.select("role")
+.eq("auth_user_id",userData.user.id)
+.single()
+
+if(emp && emp.role === "admin"){
+window.location="admin.html"
+}else{
+window.location="employee.html"
+}
+
+}
+
+handleAuth()
+
+</script>
+
+</body>
+</html>

@@ -161,16 +161,37 @@ let holidayDates = [];
 
 async function loadUserName(){
 
-const { data:userData } = await db.auth.getUser();
+const { data:userData } = await db.auth.getUser()
 
-const { data:emp } = await db
+if(!userData.user){
+window.location="index.html"
+return
+}
+
+let { data:emp } = await db
 .from("employees")
 .select("name")
 .eq("auth_user_id",userData.user.id)
-.single();
+.single()
+
+if(!emp){
+
+const meta = userData.user.user_metadata
+
+await db.from("employees").insert({
+auth_user_id:userData.user.id,
+name:meta.name || "Employee",
+email:userData.user.email,
+phone:meta.phone || "",
+role:"employee"
+})
+
+emp = { name: meta.name || "Employee" }
+
+}
 
 document.getElementById("welcomeUser").innerText =
-"Welcome back, " + emp.name;
+"Welcome back, " + emp.name
 
 }
 
