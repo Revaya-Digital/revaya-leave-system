@@ -15,12 +15,6 @@
 
 async function handleAuth(){
 
-const { data, error } = await db.auth.getSession()
-
-if(error){
-console.log(error)
-}
-
 const { data:userData } = await db.auth.getUser()
 
 if(!userData.user){
@@ -28,21 +22,51 @@ window.location="index.html"
 return
 }
 
-/* check role */
+const user = userData.user
 
-const { data: emp } = await db
+/* check if employee already exists */
+
+let { data:emp } = await db
 .from("employees")
-.select("role")
-.eq("auth_user_id",userData.user.id)
+.select("*")
+.eq("auth_user_id",user.id)
 .single()
 
-if(emp && emp.role === "admin"){
+/* create employee if missing */
+
+if(!emp){
+
+const meta = user.user_metadata
+
+await db.from("employees").insert({
+
+auth_user_id:user.id,
+name:meta.name || "Employee",
+email:user.email,
+phone:meta.phone || "",
+role:"employee"
+
+})
+
+}
+
+/* redirect based on role */
+
+const { data:employee } = await db
+.from("employees")
+.select("role")
+.eq("auth_user_id",user.id)
+.single()
+
+if(employee.role === "admin"){
 window.location="admin.html"
 }else{
 window.location="employee.html"
 }
 
 }
+
+handleAuth()
 
 handleAuth()
 

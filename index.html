@@ -244,31 +244,31 @@ errorBox.innerText = error.message
 return
 }
 
-/* wait until supabase returns user */
+// /* wait until supabase returns user */
 
-if(!data.user){
-showToast("Verification email sent. Please verify before login.","info")
-return
-}
+// if(!data.user){
+// showToast("Verification email sent. Please verify before login.","info")
+// return
+// }
 
-/* insert employee */
+// /* insert employee */
 
-const { error: empError } = await db
-.from("employees")
-.insert({
+// const { error: empError } = await db
+// .from("employees")
+// .insert({
 
-auth_user_id: data.user.id,
-name: name.value,
-email: newEmail.value,
-phone: fullPhone,
-role: "employee"
+// auth_user_id: data.user.id,
+// name: name.value,
+// email: newEmail.value,
+// phone: fullPhone,
+// role: "employee"
 
-})
+// })
 
-if(empError){
-showToast(empError.message,"error")
-return
-}
+// if(empError){
+// showToast(empError.message,"error")
+// return
+// }
 
 showToast("Account created. Please verify email.","success")
 
