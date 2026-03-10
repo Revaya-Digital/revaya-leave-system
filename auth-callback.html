@@ -39,13 +39,11 @@ if(!emp){
 const meta = user.user_metadata
 
 await db.from("employees").insert({
-
-auth_user_id:user.id,
-name:meta.name || "Employee",
-email:user.email,
-phone:meta.phone || "",
-role:"employee"
-
+auth_user_id: user.id,
+email: user.email,
+name: meta?.name || "",
+phone: meta?.phone || "",
+role: "employee"
 })
 
 }
@@ -65,8 +63,6 @@ window.location="employee.html"
 }
 
 }
-
-handleAuth()
 
 handleAuth()
 
