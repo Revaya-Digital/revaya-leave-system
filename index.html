@@ -216,7 +216,10 @@ async function signup(){
 
 const errorBox = document.getElementById("signupError")
 
-const phone = document.getElementById("phone").value.trim()
+const nameInput = document.getElementById("name").value
+const emailInput = document.getElementById("newEmail").value
+const passwordInput = document.getElementById("newPassword").value
+
 const fullPhone = iti.getNumber()
 
 if(!iti.isValidNumber()){
@@ -226,12 +229,12 @@ return
 
 const { data, error } = await db.auth.signUp({
 
-email: newEmail.value,
-password: newPassword.value,
+email: emailInput,
+password: passwordInput,
 options:{
 emailRedirectTo: window.location.origin + "/auth-callback.html",
 data:{
-name: name.value,
+name: nameInput,
 phone: fullPhone
 }
 }
@@ -243,13 +246,7 @@ errorBox.innerText = error.message
 return
 }
 
-/* wait until supabase returns user */
-
-if(!data.user){
-showToast("Account created. Please verify email.","info")
-return
-}
-
+showToast("Account created. Please verify email.","info");
 }
 
 function validateEmail(){
