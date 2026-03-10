@@ -230,7 +230,7 @@ email: newEmail.value,
 password: newPassword.value,
 
 options:{
-emailRedirectTo: "https://revaya-leave-system.vercel.app/auth-callback.html",
+emailRedirectTo: window.location.origin + "/auth-callback.html",
 data:{
 name: name.value,
 phone: fullPhone
