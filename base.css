@@ -6,14 +6,28 @@ margin:20px;
 table{
 border-collapse: collapse;
 width:100%;
+font-size:14px;
 }
 
-th, td{
+thead{
+background:#f9fafb;
+}
+
+td{
 border:1px solid #ddd;
-padding:8px;
+border-top:1px solid #e5e7eb;
+padding:12px;
 }
 
 th{
+padding:12px;
+font-weight:600;
+color:#374151;
+background:#f3f4f6;
+border:1px solid #ddd;
+}
+
+tr:hover{
 background:#f3f4f6;
 }
 
@@ -85,4 +99,45 @@ animation:fadeIn 0.25s ease;
 @keyframes fadeIn{
 from{ opacity:0; transform:translateY(-10px);}
 to{ opacity:1; transform:translateY(0);}
+}
+
+.container{
+max-width:1200px;
+margin:auto;
+padding:20px;
+}
+
+.section-title{
+font-size:18px;
+font-weight:600;
+margin-bottom:16px;
+}
+
+.card{
+background:white;
+padding:20px;
+border-radius:12px;
+box-shadow:0 4px 12px rgba(0,0,0,0.05);
+}
+
+.primary-btn{
+background:#2563eb;
+color:white;
+padding:10px 16px;
+border-radius:8px;
+border:none;
+cursor:pointer;
+}
+
+.primary-btn:hover{
+background:#1d4ed8;
+}
+
+.danger-btn{
+background:#ef4444;
+color:white;
+}
+
+.success-btn{
+background:#16a34a;
 }

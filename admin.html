@@ -103,71 +103,124 @@ Bank Details
 
 <div id="personalTab" class="tab-content active">
 
+<div class="form-grid">
+
+<div class="form-field">
 <label>Name</label>
 <input id="empName">
+</div>
 
+<div class="form-field">
 <label>Email</label>
 <input id="empEmail">
+</div>
 
+<div class="form-field">
 <label>Phone</label>
 <input id="empPhone">
+</div>
 
+<div class="form-field">
 <label>CNIC</label>
-<input id="empCnic" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}" placeholder="xxxxx-xxxxxxx-x">
+<input id="empCnic" placeholder="xxxxx-xxxxxxx-x" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}">
+</div>
 
+<div class="form-field">
 <label>Job Title</label>
 <input id="empJob">
+</div>
 
+<div class="form-field">
 <label>Department</label>
 <input id="empDept">
+</div>
 
+<div class="form-field">
 <label>Joining Date</label>
 <input type="date" id="empJoin">
+</div>
+
+</div>
 
 </div>
 
 <div id="salaryTab" class="tab-content">
 
+<div class="form-grid">
+
+<div class="form-field">
 <label>Basic Salary</label>
 <input id="empBasicSalary">
+</div>
 
+<div class="form-field">
 <label>Home Allowance</label>
 <input id="empHomeAllowance">
+</div>
 
+<div class="form-field">
 <label>Travel Allowance</label>
 <input id="empTravelAllowance">
+</div>
 
+<div class="form-field">
 <label>Mobile Allowance</label>
 <input id="empMobileAllowance">
+</div>
 
+<div class="form-field">
 <label>Commission</label>
 <input id="empCommission">
+</div>
 
+<div class="form-field">
 <label>Effective Date</label>
 <input type="date" id="empSalaryEffective">
+</div>
+
+</div>
 
 </div>
 
 <div id="bankTab" class="tab-content">
 
+<div class="form-grid">
+
+<div class="form-field">
 <label>Account Title</label>
 <input id="empAccountTitle">
+</div>
 
+<div class="form-field">
 <label>Bank Name</label>
 <input id="empBankName">
+</div>
 
+<div class="form-field">
 <label>Account Number</label>
 <input id="empAccountNumber">
+</div>
 
+<div class="form-field">
 <label>IBAN</label>
 <input id="empIban">
+</div>
 
 </div>
 
-<br>
+</div>
 
-<button onclick="saveEmployee()">Save</button>
-<button onclick="closeEmployeeModal()">Close</button>
+<div class="modal-actions">
+
+<button class="primary-btn" onclick="saveEmployee()">
+Save Employee
+</button>
+
+<button class="secondary-btn" onclick="closeEmployeeModal()">
+Cancel
+</button>
+
+</div>
 
 </div>
 

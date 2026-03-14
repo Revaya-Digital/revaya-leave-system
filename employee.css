@@ -11,6 +11,12 @@ border-radius:12px;
 padding:16px;
 box-shadow:0 4px 12px rgba(0,0,0,0.08);
 border-left:6px solid #2563eb;
+transition:0.2s;
+}
+
+.balance-card:hover{
+transform:translateY(-3px);
+box-shadow:0 10px 20px rgba(0,0,0,0.08);
 }
 
 .balance-title{
