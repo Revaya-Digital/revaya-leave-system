@@ -8,6 +8,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="supabase.js"></script>
   <script src="reports.js"></script>
 </head>
@@ -28,12 +29,24 @@ Revaya <span>Admin</span>
 <i class="fa-solid fa-chart-line"></i> Dashboard
 </li>
 
-<li data-page="requests" onclick="openPage('requests',this)">
-<i class="fa-solid fa-envelope-open-text"></i> Leave Requests
+<li data-page="payroll" onclick="openPage('payroll',this)">
+<i class="fa-solid fa-money-bill"></i> Payroll
+</li>
+
+<li data-page="payrollSettings" onclick="openPage('payrollSettings',this)">
+<i class="fa-solid fa-gear"></i> Payroll Settings
 </li>
 
 <li data-page="holidays" onclick="openPage('holidays',this)">
 <i class="fa-solid fa-calendar-days"></i> Holidays
+</li>
+
+<li data-page="employees" onclick="openPage('employees',this)">
+<i class="fa-solid fa-users"></i> Employees
+</li>
+
+<li data-page="requests" onclick="openPage('requests',this)">
+<i class="fa-solid fa-envelope-open-text"></i> Leave Requests
 </li>
 
 <li data-page="manual" onclick="openPage('manual',this)">
@@ -66,12 +79,107 @@ Revaya <span>Admin</span>
 
 <div id="pageContent"></div>
 
+<div id="employeeModal" class="modal">
+
+<div class="modal-content">
+
+<h3>Edit Employee</h3>
+
+<div class="tabs">
+
+<button class="tab-btn active" data-tab="personal">
+Personal Details
+</button>
+
+<button class="tab-btn" data-tab="salary">
+Salary Details
+</button>
+
+<button class="tab-btn" data-tab="bank">
+Bank Details
+</button>
+
+</div>
+
+<div id="personalTab" class="tab-content active">
+
+<label>Name</label>
+<input id="empName">
+
+<label>Email</label>
+<input id="empEmail">
+
+<label>Phone</label>
+<input id="empPhone">
+
+<label>CNIC</label>
+<input id="empCnic" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}" placeholder="xxxxx-xxxxxxx-x">
+
+<label>Job Title</label>
+<input id="empJob">
+
+<label>Department</label>
+<input id="empDept">
+
+<label>Joining Date</label>
+<input type="date" id="empJoin">
+
+</div>
+
+<div id="salaryTab" class="tab-content">
+
+<label>Basic Salary</label>
+<input id="empBasicSalary">
+
+<label>Home Allowance</label>
+<input id="empHomeAllowance">
+
+<label>Travel Allowance</label>
+<input id="empTravelAllowance">
+
+<label>Mobile Allowance</label>
+<input id="empMobileAllowance">
+
+<label>Commission</label>
+<input id="empCommission">
+
+<label>Effective Date</label>
+<input type="date" id="empSalaryEffective">
+
+</div>
+
+<div id="bankTab" class="tab-content">
+
+<label>Account Title</label>
+<input id="empAccountTitle">
+
+<label>Bank Name</label>
+<input id="empBankName">
+
+<label>Account Number</label>
+<input id="empAccountNumber">
+
+<label>IBAN</label>
+<input id="empIban">
+
+</div>
+
+<br>
+
+<button onclick="saveEmployee()">Save</button>
+<button onclick="closeEmployeeModal()">Close</button>
+
+</div>
+
+</div>
+
 </div>
 </div>
 
 <script>
 
 let editingHolidayId = null;
+let currentEmployeeId=null
 
 function openPage(page,el){
 
@@ -108,6 +216,42 @@ renderManualLeavePage();
 if(page==="reports"){
 title.innerText="Reports";
 renderReportsPage();
+}
+
+if(page==="employees"){
+title.innerText="Employees";
+renderEmployeesPage();
+}
+
+if(page==="payroll"){
+title.innerText="Payroll";
+renderPayrollPage();
+}
+
+if(page==="payrollSettings"){
+title.innerText="Payroll Settings";
+renderPayrollSettingsPage();
+}
+
+}
+
+async function checkAdminAuth(){
+
+const { data:userData } = await db.auth.getUser()
+
+if(!userData.user){
+window.location="index.html"
+return
+}
+
+const { data: emp } = await db
+.from("employees")
+.select("role")
+.eq("auth_user_id",userData.user.id)
+.single()
+
+if(!emp || emp.role !== "admin"){
+window.location="employee.html"
 }
 
 }
@@ -1135,6 +1279,981 @@ text.includes(input) ? "" : "none";
 
 }
 
+async function renderEmployeesPage(){
+
+const { data: employees, error } = await db
+.from("employees")
+.select("*")
+//.eq("role","employee")
+.order("name")
+
+if(error){
+showToast(error.message,"error")
+return
+}
+
+let rows=""
+
+employees.forEach(e=>{
+
+rows+=`
+
+<tr>
+
+<td>${e.name}</td>
+<td>${e.cnic || "-"}</td>
+<td>${e.job_title || "-"}</td>
+<td>${e.department || "-"}</td>
+<td>${e.joining_date || "-"}</td>
+
+<td>
+
+<button class="edit-emp-btn" data-id="${e.auth_user_id}">
+Edit
+</button>
+
+<button class="delete-emp-btn" data-id="${e.auth_user_id}">
+Delete
+</button>
+
+</td>
+
+</tr>
+
+`
+
+})
+
+document.getElementById("pageContent").innerHTML = `
+
+<div class="card">
+
+<h3>Employees</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Name</th>
+<th>CNIC</th>
+<th>Job Title</th>
+<th>Department</th>
+<th>Joining Date</th>
+<th>Actions</th>
+</tr>
+</thead>
+
+<tbody>
+${rows}
+</tbody>
+
+</table>
+
+</div>
+
+`
+
+}
+
+async function editEmployee(id){
+
+const { data } = await db
+.from("employees")
+.select("*")
+.eq("auth_user_id",id)
+.single()
+
+const salary = prompt("Basic Salary",data.basic_salary || 0)
+const allowance = prompt("Allowance",data.allowance || 0)
+
+await db
+.from("employees")
+.update({
+basic_salary:salary,
+allowance:allowance
+})
+.eq("auth_user_id",id)
+
+renderEmployeesPage()
+
+}
+
+async function renderPayrollPage(){
+
+const { data } = await db
+.from("payroll")
+.select(`
+*,
+employees (
+name,
+email
+)
+`)
+.order("created_at",{ascending:false})
+
+let rows=""
+
+data.forEach(p=>{
+
+rows+=`
+
+<tr>
+<td>${p.employees?.name || "Employee"}</td>
+<td>${p.payroll_month}</td>
+<td>${p.period_start}</td>
+<td>${p.period_end}</td>
+<td>Rs ${Number(p.final_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>${p.payment_status}</td>
+
+<td>
+
+${p.payment_proof 
+? `
+<div style="display:flex;align-items:center;gap:8px">
+
+<img 
+src="${p.payment_proof}" 
+class="proof-thumb"
+data-url="${p.payment_proof}"
+style="width:40px;height:40px;border-radius:6px;cursor:pointer;object-fit:cover"
+>
+
+<button class="download-proof-btn" data-url="${p.payment_proof}">
+Download
+</button>
+
+<button class="replace-proof-btn" data-id="${p.id}">
+Replace
+</button>
+
+</div>
+`
+: `<div style="display:flex;align-items:center;gap:8px">
+
+<button class="upload-proof-btn" data-id="${p.id}">
+Upload
+</button>
+
+<input 
+type="file"
+class="upload-input"
+data-id="${p.id}"
+style="display:none"
+>
+
+</div>`
+}
+
+</td>
+
+</tr>
+
+`
+
+})
+
+document.getElementById("pageContent").innerHTML=`
+
+<div class="card">
+
+<button onclick="generatePayroll()">
+Generate Payroll
+</button>
+
+<table>
+
+<thead>
+<tr>
+<th>Employee</th>
+<th>Period</th>
+<th>Period Start</th>
+<th>Period End</th>
+<th>Salary</th>
+<th>Status</th>
+<th>Proof</th>
+</tr>
+</thead>
+
+<tbody>
+${rows}
+</tbody>
+
+</table>
+
+</div>
+`
+
+}
+
+function viewProof(url){
+
+const modal = document.createElement("div")
+
+modal.style.position="fixed"
+modal.style.top="0"
+modal.style.left="0"
+modal.style.width="100%"
+modal.style.height="100%"
+modal.style.background="rgba(0,0,0,0.7)"
+modal.style.display="flex"
+modal.style.alignItems="center"
+modal.style.justifyContent="center"
+modal.style.zIndex="9999"
+
+modal.innerHTML = `
+<div style="background:white;padding:20px;border-radius:10px">
+<img src="${url}" style="max-width:80vw;max-height:80vh">
+<br><br>
+<button onclick="this.closest('div').parentElement.remove()">Close</button>
+</div>
+`
+
+document.body.appendChild(modal)
+
+}
+
+/* View Proof Event Listener */
+document.addEventListener("click",function(e){
+
+if(e.target.classList.contains("proof-thumb")){
+
+viewProof(e.target.dataset.url)
+
+}
+
+})
+/* View Proof Event Listener */
+/* Download Proof Event Listener */
+document.addEventListener("click",function(e){
+
+if(e.target.classList.contains("download-proof-btn")){
+
+const url = e.target.dataset.url
+
+const a = document.createElement("a")
+a.href = url
+a.download = "salary-proof"
+a.click()
+
+}
+
+})
+/* Download Proof Event Listener */
+/* Replace Proof Event Listener */
+document.addEventListener("click",function(e){
+
+if(e.target.classList.contains("replace-proof-btn")){
+
+const payrollId = e.target.dataset.id
+
+const fileInput = document.createElement("input")
+fileInput.type = "file"
+
+fileInput.onchange = function(){
+
+uploadSalaryProof(payrollId,fileInput.files[0])
+
+}
+
+fileInput.click()
+
+}
+
+})
+/* Replace Proof Event Listener */
+/* Upload Proof Event Listener */
+document.addEventListener("click",function(e){
+
+if(e.target.classList.contains("upload-proof-btn")){
+
+const payrollId = e.target.dataset.id
+
+const fileInput = document.querySelector(`.upload-input[data-id="${payrollId}"]`)
+
+fileInput.click()
+
+}
+
+})
+/* Upload Proof Event Listener */
+/* FileSelect Proof Event Listener */
+document.addEventListener("change",function(e){
+
+if(e.target.classList.contains("upload-input")){
+
+const payrollId = e.target.dataset.id
+const file = e.target.files[0]
+
+if(file){
+
+uploadSalaryProof(payrollId,file)
+
+}
+
+}
+
+})
+/* FileSelect Proof Event Listener */
+/* Employee Edit Evenet Listener */
+document.addEventListener("click",async function(e){
+
+if(e.target.classList.contains("edit-emp-btn")){
+
+const id = e.target.dataset.id
+
+currentEmployeeId = id
+
+const { data } = await db
+.from("employees")
+.select("*")
+.eq("auth_user_id",id)
+.single()
+
+document.getElementById("empName").value = data.name || ""
+document.getElementById("empEmail").value = data.email || ""
+document.getElementById("empPhone").value = data.phone || ""
+document.getElementById("empCnic").value = data.cnic || ""
+document.getElementById("empJob").value = data.job_title || ""
+document.getElementById("empDept").value = data.department || ""
+document.getElementById("empJoin").value = data.joining_date || ""
+
+/* Load latest salary */
+
+const { data: salary } = await db
+.from("employee_salaries")
+.select("*")
+.eq("employee_id",id)
+.lte("effective_date",new Date().toISOString().split("T")[0])
+.order("effective_date",{ascending:false})
+.limit(1)
+.single()
+
+if(salary){
+
+document.getElementById("empBasicSalary").value = salary.basic_salary || ""
+document.getElementById("empHomeAllowance").value = salary.home_allowance || ""
+document.getElementById("empTravelAllowance").value = salary.travel_allowance || ""
+document.getElementById("empMobileAllowance").value = salary.mobile_allowance || ""
+document.getElementById("empCommission").value = salary.commission || ""
+document.getElementById("empSalaryEffective").value = salary.effective_date || ""
+
+}
+
+/* Load active bank */
+
+const { data: bank } = await db
+.from("employee_bank_details")
+.select("*")
+.eq("employee_id",id)
+.eq("is_active",true)
+.single()
+
+if(bank){
+
+document.getElementById("empAccountTitle").value = bank.account_title || ""
+document.getElementById("empBankName").value = bank.bank_name || ""
+document.getElementById("empAccountNumber").value = bank.account_number || ""
+document.getElementById("empIban").value = bank.iban || ""
+
+}
+
+document.getElementById("employeeModal").style.display="flex"
+
+}
+
+})
+/* Employee Edit Evenet Listener */
+/* Employee Delete Evenet Listener */
+document.addEventListener("click",async function(e){
+
+if(e.target.classList.contains("delete-emp-btn")){
+
+const id = e.target.dataset.id
+
+if(!confirm("Delete employee?")) return
+
+await db
+.from("employees")
+.delete()
+.eq("auth_user_id",id)
+
+renderEmployeesPage()
+
+}
+
+})
+/* Employee Delete Evenet Listener */
+/* Salary Tab Evenet Listener */
+document.addEventListener("click",function(e){
+
+if(e.target.classList.contains("tab-btn")){
+
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+btn.classList.remove("active")
+})
+
+document.querySelectorAll(".tab-content").forEach(tab=>{
+tab.classList.remove("active")
+})
+
+e.target.classList.add("active")
+
+const tab = e.target.dataset.tab
+
+if(tab === "personal"){
+document.getElementById("personalTab").classList.add("active")
+}
+
+if(tab === "salary"){
+document.getElementById("salaryTab").classList.add("active")
+}
+
+if(tab === "bank"){
+document.getElementById("bankTab").classList.add("active")
+}
+
+}
+
+})
+/* Salary Tab Evenet Listener */
+
+async function saveEmployeePersonal(){
+
+const payload = {
+
+name: document.getElementById("empName").value,
+phone: document.getElementById("empPhone").value,
+cnic: document.getElementById("empCnic").value,
+job_title: document.getElementById("empJob").value,
+department: document.getElementById("empDept").value,
+joining_date: document.getElementById("empJoin").value
+
+}
+
+const { data, error } = await db
+.from("employees")
+.update(payload)
+.eq("auth_user_id", currentEmployeeId)
+.select()
+
+if(error){
+showToast("Error in Personal Details:" + error.message,"error")
+return
+
+}
+
+}
+
+async function saveEmployeeSalary(){
+
+const salaryData = {
+
+employee_id: currentEmployeeId,
+
+basic_salary: Number(document.getElementById("empBasicSalary").value),
+home_allowance: Number(document.getElementById("empHomeAllowance").value),
+travel_allowance: Number(document.getElementById("empTravelAllowance").value),
+mobile_allowance: Number(document.getElementById("empMobileAllowance").value),
+commission: Number(document.getElementById("empCommission").value),
+
+effective_date: document.getElementById("empSalaryEffective").value
+
+}
+
+const { data, error } = await db
+.from("employee_salaries")
+.insert(salaryData)
+
+if(error){
+showToast("Error in Salary Details:" + error.message,"error")
+return
+
+}
+
+}
+
+async function saveEmployeeBank(){
+
+await db
+.from("employee_bank_details")
+.update({is_active:false})
+.eq("employee_id",currentEmployeeId)
+
+const bankData = {
+
+employee_id: currentEmployeeId,
+
+account_title: document.getElementById("empAccountTitle").value,
+bank_name: document.getElementById("empBankName").value,
+account_number: document.getElementById("empAccountNumber").value,
+iban: document.getElementById("empIban").value,
+
+is_active:true
+
+}
+
+const { data, error } = await db
+.from("employee_bank_details")
+.insert(bankData)
+
+if(error){
+showToast("Error in Bank Details:" + error.message,"error")
+return
+
+}
+
+}
+
+function closeEmployeeModal(){
+
+document.getElementById("employeeModal").style.display="none"
+
+}
+
+async function saveEmployee(){
+
+await saveEmployeePersonal()
+await saveEmployeeSalary()
+await saveEmployeeBank()
+
+showToast("Employee updated","success")
+
+closeEmployeeModal()
+
+renderEmployeesPage()
+
+}
+
+async function getEmployeeSalary(empId, effectiveDate){
+
+const { data, error } = await db
+.from("employee_salaries")
+.select("*")
+.eq("employee_id",empId)
+.lte("effective_date",effectiveDate)
+.order("effective_date",{ascending:false})
+.limit(1)
+.single()
+
+if(error){
+console.error(error)
+return null
+}
+
+return data
+}
+
+async function calculatePayrollPeriod(){
+
+const { data: settings } = await db
+.from("payroll_settings")
+.select("*")
+.order("effective_from",{ascending:false})
+.limit(1)
+.single()
+
+const today = new Date()
+
+let start = new Date(today.getFullYear(),today.getMonth()-1,settings.cycle_start_day)
+
+let end = new Date(today.getFullYear(),today.getMonth(),settings.cycle_end_day)
+
+return {
+start:start.toISOString().split("T")[0],
+end:end.toISOString().split("T")[0]
+}
+
+}
+
+async function calculateUnpaidLeaves(empId,start,end){
+
+start = new Date(start).toISOString().split("T")[0]
+end = new Date(end).toISOString().split("T")[0]
+
+const { data, error } = await db
+.from("leave_requests")
+.select("start_date,end_date")
+.eq("employee_id",empId)
+.eq("status","approved")
+.eq("is_pto",false)
+.lte("start_date",end)
+.gte("end_date",start)
+
+if(error){
+console.error(error)
+return 0
+}
+
+return data ? data.length : 0
+
+}
+
+function calculateWorkingDays(start,end){
+
+const startDate = new Date(start)
+const endDate = new Date(end)
+
+let days = 0
+
+let current = new Date(startDate)
+
+while(current <= endDate){
+
+const day = current.getDay()
+
+if(day !== 0){
+days++
+}
+
+current.setDate(current.getDate()+1)
+
+}
+
+return days
+
+}
+
+function getActualWorkStart(joinDate,periodStart){
+
+const join = new Date(joinDate)
+const start = new Date(periodStart)
+
+return join > start ? join : start
+
+}
+
+function getActualWorkEnd(resignDate,periodEnd){
+
+if(!resignDate) return periodEnd
+
+const resign = new Date(resignDate)
+const end = new Date(periodEnd)
+
+return resign < end ? resign : end
+
+}
+
+async function payrollAlreadyGenerated(start){
+
+const { data } = await db
+.from("payroll")
+.select("id")
+.eq("period_start",start)
+.limit(1)
+
+return data.length > 0
+
+}
+
+// async function generatePayroll(){
+
+// const period = await calculatePayrollPeriod()
+// const monthName = new Date(period.start).toLocaleString('default',{month:'long',year:'numeric'})
+
+// const { data: employees } = await db
+// .from("employees")
+// .select("*")
+
+// for(const emp of employees){
+
+// const basic = emp.basic_salary || 0
+// const allowance = emp.allowance || 0
+
+// const unpaid = await calculateUnpaidLeaves(emp.auth_user_id,period.start,period.end)
+
+// const daily = basic / 26
+
+// const deduction = daily * unpaid
+
+// const finalSalary = basic + allowance - deduction
+
+// await db.from("payroll").insert({
+
+// employee_id:emp.auth_user_id,
+
+// payroll_month: monthName,
+// period_start:period.start,
+// period_end:period.end,
+
+// basic_salary:basic,
+// allowance:allowance,
+
+// unpaid_leaves:unpaid,
+// deduction:deduction,
+
+// final_salary:finalSalary
+
+// })
+
+// }
+
+// showToast("Payroll generated successfully","success")
+
+// renderPayrollPage()
+
+// }
+
+async function generatePayroll(){
+
+const period = await calculatePayrollPeriod()
+
+const exists = await payrollAlreadyGenerated(period.start)
+
+if(exists){
+showToast("Payroll already generated for this period","error")
+return
+}
+
+const monthName = new Date(period.start)
+.toLocaleString('default',{month:'long',year:'numeric'})
+
+const { data: employees, error } = await db
+.from("employees")
+.select("*")
+.in("status",["active","resigned"])
+
+for(const emp of employees){
+
+/* skip if joined after payroll period */
+
+if(emp.joining_date && emp.joining_date > period.end){
+continue
+}
+
+/* skip if resigned before payroll period */
+
+if(emp.resignation_date && emp.resignation_date < period.start){
+continue
+}
+
+/* salary fetch */
+
+const salary = await getEmployeeSalary(emp.auth_user_id,period.end)
+
+if(!salary) continue
+
+const basic = salary.basic_salary || 0
+const home = salary.home_allowance || 0
+const travel = salary.travel_allowance || 0
+const mobile = salary.mobile_allowance || 0
+const commission = salary.commission || 0
+
+const allowances = Number((home + travel + mobile + commission).toFixed(2))
+
+/* actual work start */
+
+const workStart = getActualWorkStart(emp.joining_date,period.start)
+
+/* working days */
+
+const totalDays = calculateWorkingDays(period.start,period.end)
+const workEnd = getActualWorkEnd(emp.resignation_date,period.end)
+const workedDays = calculateWorkingDays(workStart,workEnd)
+
+/* unpaid leaves */
+
+const unpaid = await calculateUnpaidLeaves(emp.auth_user_id,workStart,workEnd)
+
+/* salary calculation */
+
+const dailyRate = Number((basic / totalDays).toFixed(2))
+
+const deduction = Number((dailyRate * unpaid).toFixed(2))
+
+const earnedSalary = Number((dailyRate * workedDays).toFixed(2))
+
+const finalSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
+
+/* save payroll */
+
+await db.from("payroll").insert({
+
+employee_id:emp.auth_user_id,
+
+payroll_month:monthName,
+
+period_start:period.start,
+period_end:period.end,
+
+basic_salary:basic,
+
+home_allowance:home,
+travel_allowance:travel,
+mobile_allowance:mobile,
+commission:commission,
+
+worked_days:workedDays,
+unpaid_leaves:unpaid,
+
+deduction:deduction,
+
+final_salary:finalSalary
+
+})
+
+}
+
+showToast("Payroll generated successfully","success")
+
+renderPayrollPage()
+
+}
+
+async function uploadSalaryProof(payrollId,file){
+
+const filePath = `salary-proofs/${Date.now()}_${file.name}`
+
+const { error } = await db.storage
+.from("salary-proofs")
+.upload(filePath,file)
+
+if(error){
+showToast(error.message,"error")
+return
+}
+
+const { data } = db.storage
+.from("salary-proofs")
+.getPublicUrl(filePath)
+
+await db.from("payroll")
+.update({
+payment_proof:data.publicUrl,
+payment_status:"paid",
+payment_date:new Date()
+})
+.eq("id",payrollId)
+
+showToast("Salary marked as paid","success")
+
+renderPayrollPage()
+
+}
+
+function generatePayslip(payroll){
+
+const { jsPDF } = window.jspdf
+
+const doc = new jsPDF()
+
+doc.text("Salary Slip",20,20)
+
+doc.text("Period: "+payroll.period_start+" → "+payroll.period_end,20,40)
+
+doc.text("Basic Salary: "+payroll.basic_salary,20,60)
+doc.text("Allowance: "+payroll.allowance,20,70)
+
+doc.text("Unpaid Leaves: "+payroll.unpaid_leaves,20,80)
+
+doc.text("Deduction: "+payroll.deduction,20,90)
+
+doc.text("Final Salary: "+payroll.final_salary,20,110)
+
+doc.save("payslip.pdf")
+
+}
+
+async function loadPayslips(){
+
+const { data:userData } = await db.auth.getUser()
+
+const { data } = await db
+.from("payroll")
+.select("*")
+.eq("employee_id",userData.user.id)
+.order("created_at",{ascending:false})
+
+let rows=""
+
+data.forEach(p=>{
+
+rows+=`
+
+<tr>
+<td>${p.period_start}</td>
+<td>${p.period_end}</td>
+<td>Rs ${Number(p.final_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+
+<td>
+
+<button onclick='generatePayslip(${JSON.stringify(p)})'>
+Download
+</button>
+
+</td>
+
+</tr>
+
+`
+
+})
+
+document.getElementById("payslipTable").innerHTML=rows
+
+}
+
+async function markPaid(id){
+
+await db
+.from("payroll")
+.update({
+
+payment_status:"paid",
+payment_date:new Date()
+
+})
+.eq("id",id)
+
+renderPayrollPage()
+
+}
+
+function renderPayrollSettingsPage(){
+
+document.getElementById("pageContent").innerHTML=`
+
+<div class="card">
+
+<h3>Payroll Settings</h3>
+
+<label>Cycle Start Day</label>
+<input id="cycleStart">
+
+<label>Cycle End Day</label>
+<input id="cycleEnd">
+
+<label>Disbursement Day</label>
+<input id="salaryDay">
+
+<button onclick="savePayrollSettings()">
+Save
+</button>
+
+</div>
+`
+
+}
+
+async function savePayrollSettings(){
+
+const start=document.getElementById("cycleStart").value
+const end=document.getElementById("cycleEnd").value
+const pay=document.getElementById("salaryDay").value
+
+await db.from("payroll_settings").insert({
+
+cycle_start_day:start,
+cycle_end_day:end,
+salary_disbursement_day:pay,
+effective_from:new Date()
+
+})
+
+showToast("Payroll Settings Saved","success")
+
+}
+
+checkAdminAuth()
 openPage("dashboard");
 </script>
 

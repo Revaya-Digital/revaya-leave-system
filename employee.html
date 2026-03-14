@@ -7,6 +7,7 @@
   
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="supabase.js"></script>
 </head>
 
@@ -23,6 +24,24 @@
 </header>
 
 <div class="content">
+
+<h3>My Payslips</h3>
+
+<table>
+
+<thead>
+<tr>
+<th>Period Start</th>
+<th>Period End</th>
+<th>Final Salary</th>
+<th>Payslip</th>
+</tr>
+</thead>
+
+<tbody id="payslipTable"></tbody>
+
+</table> 
+
 
 <h3>Leave Balance</h3>
 <div id="balanceCards" class="balance-grid"></div>
@@ -205,6 +224,67 @@ async function getEmployeeId() {
     .eq("auth_user_id", user.user.id)
     .single();
   return data.id;
+}
+
+async function loadPayslips(){
+
+const { data:userData } = await db.auth.getUser()
+
+const { data } = await db
+.from("payroll")
+.select("*")
+.eq("employee_id",userData.user.id)
+.order("created_at",{ascending:false})
+
+let rows=""
+
+data.forEach(p=>{
+
+rows+=`
+
+<tr>
+
+<td>${p.period_start}</td>
+<td>${p.period_end}</td>
+<td>${p.final_salary}</td>
+
+<td>
+<button onclick='generatePayslip(${JSON.stringify(p)})'>
+Download
+</button>
+</td>
+
+</tr>
+
+`
+
+})
+
+document.getElementById("payslipTable").innerHTML=rows
+
+}
+
+function generatePayslip(payroll){
+
+const { jsPDF } = window.jspdf
+
+const doc = new jsPDF()
+
+doc.text("Salary Slip",20,20)
+
+doc.text("Period: "+payroll.period_start+" → "+payroll.period_end,20,40)
+
+doc.text("Basic Salary: "+payroll.basic_salary,20,60)
+doc.text("Allowance: "+payroll.allowance,20,70)
+
+doc.text("Unpaid Leaves: "+payroll.unpaid_leaves,20,80)
+
+doc.text("Deduction: "+payroll.deduction,20,90)
+
+doc.text("Final Salary: "+payroll.final_salary,20,110)
+
+doc.save("payslip.pdf")
+
 }
 
 async function loadLeaveTypes() {
@@ -672,6 +752,7 @@ async function initPage(){
 await loadHolidays();
 
 initCalendar();
+loadPayslips()
 loadRequests();
 loadLeaveTypes();
 loadLeaveBalance();
