@@ -59,24 +59,33 @@ const filtered = leaves.filter(l=>{
 
 const d = new Date(l.start_date)
 
-return d >= startDate && d <= endDate
+return d >= startDate && d <= endDate && l.status !== "cancelled"
 
 })
 
 /* STATS */
 
 let totalDays = 0
+let totalRequests = 0
+let pendingRequests = 0
 let approvedDays = 0
+let rejectedDays = 0
 let rejected = 0
+let approved = 0
 let unpaid = 0
+let paid = 0
 
 filtered.forEach(l=>{
 
 totalDays += l.days || 0
-
+totalRequests += 1
+if(l.status==="pending") pendingRequests += 1
 if(l.status==="approved") approvedDays += l.days || 0
+if(l.status==="rejected") rejectedDays += l.days || 0
+if(l.status==="approved") approved += 1
 if(l.status==="rejected") rejected += 1
-if(l.is_pto===false) unpaid += l.days || 0
+if(l.is_pto===false && l.status==="approved") unpaid += l.days || 0
+if(l.is_pto===true && l.status==="approved") paid += l.days || 0
 
 })
 
@@ -91,8 +100,18 @@ statsContainer.innerHTML = `
 </div>
 
 <div class="stat-card">
-<span>Approved Days</span>
-<h2>${approvedDays}</h2>
+<span>Total Requests</span>
+<h2>${totalRequests}</h2>
+</div>
+
+<div class="stat-card">
+<span>Pending Requests</span>
+<h2>${pendingRequests}</h2>
+</div>
+
+<div class="stat-card">
+<span>Approved Requests</span>
+<h2>${approved}</h2>
 </div>
 
 <div class="stat-card">
@@ -101,8 +120,23 @@ statsContainer.innerHTML = `
 </div>
 
 <div class="stat-card">
+<span>Approved Days</span>
+<h2>${approvedDays}</h2>
+</div>
+
+<div class="stat-card">
+<span>Rejected Days</span>
+<h2>${rejectedDays}</h2>
+</div>
+
+<div class="stat-card">
 <span>Unpaid Days</span>
 <h2>${unpaid}</h2>
+</div>
+
+<div class="stat-card">
+<span>Paid Days</span>
+<h2>${paid}</h2>
 </div>
 `
 
@@ -220,6 +254,15 @@ empBody.innerHTML+=`
 `
 
 })
+
+const rangeEl = document.getElementById("rangeFilter");
+
+if(rangeEl){
+  rangeEl.style.display = "none";
+  rangeEl.offsetHeight; // force reflow
+  rangeEl.style.display = "";
+}
+
 
 }
 

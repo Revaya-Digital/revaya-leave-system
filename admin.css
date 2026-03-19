@@ -157,6 +157,10 @@ gap:10px;
 align-items:center;
 }
 
+.filters > * {
+  min-width: 0;
+}
+
 .filters-bar{
 position:sticky;
 top:0;
@@ -165,6 +169,17 @@ padding:10px;
 z-index:50;
 border-bottom:1px solid #e5e7eb;
 }
+
+/* ===== FILTERS FIX (SCOPED) ===== */
+
+.filters-bar .input-field,
+.filters-bar .select-field,
+.filters-bar .date-field {
+  min-width: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
 
 .table-container{
 max-height:70vh;
@@ -181,6 +196,42 @@ margin-bottom:20px;
 .report-filters{
 display:flex;
 gap:10px;
+}
+
+/* ===== REPORT FILTER FIX ===== */
+
+.report-filters {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.report-filters .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.report-filters .select-wrapper,
+.report-filters .date-field {
+  width: 200px;
+  min-width: 0;
+}
+
+.report-filters .select-field,
+.report-filters .date-input {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+.report-filters .button-field {
+  flex: 0;
+}
+
+.report-filters button {
+  height: 35px;
+  padding: 0 16px;
 }
 
 .stats-grid{
@@ -327,6 +378,16 @@ line-height:28px;
 .calendar-leave{
 background:#2563eb;
 color:white;
+}
+
+.calendar-icon{
+position:absolute;
+right:10px;
+top:50%;
+transform:translateY(-50%);
+font-size:16px;
+opacity:0.6;
+pointer-events:none;
 }
 
 #holidaysPage input{

@@ -5,7 +5,9 @@
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="admin.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -107,41 +109,42 @@ Bank Details
 
 <div class="form-field">
 <label>Name</label>
-<input id="empName">
+<input class="input-field" placeholder="Name" id="empName">
 </div>
 
 <div class="form-field">
 <label>Email</label>
-<input id="empEmail">
+<input class="input-field" placeholder="Email Address" id="empEmail">
 </div>
 
 <div class="form-field">
 <label>Phone</label>
-<input id="empPhone">
+<input class="input-field" placeholder="Phone Number" id="empPhone">
 </div>
 
 <div class="form-field">
 <label>CNIC</label>
-<input id="empCnic" placeholder="xxxxx-xxxxxxx-x" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}">
+<input class="input-field" id="empCnic" placeholder="xxxxx-xxxxxxx-x" pattern="[0-9]{5}-[0-9]{7}-[0-9]{1}">
 </div>
 
 <div class="form-field">
 <label>Job Title</label>
-<input id="empJob">
+<input class="input-field" placeholder="Job Title" id="empJob">
 </div>
 
 <div class="form-field">
 <label>Department</label>
-<input id="empDept">
+<input class="input-field" placeholder="Department" id="empDept">
 </div>
 
 <div class="form-field">
 <label>Joining Date</label>
-<input type="date" id="empJoin">
+<div class="date-field">
+<input type="text" class="date-input" id="empJoin" placeholder="Joining Date">
+<span class="calendar-icon">📅</span>
 </div>
-
 </div>
-
+</div>
 </div>
 
 <div id="salaryTab" class="tab-content">
@@ -150,32 +153,35 @@ Bank Details
 
 <div class="form-field">
 <label>Basic Salary</label>
-<input id="empBasicSalary">
+<input class="input-field" placeholder="Basic Salary" id="empBasicSalary">
 </div>
 
 <div class="form-field">
 <label>Home Allowance</label>
-<input id="empHomeAllowance">
+<input class="input-field" placeholder="Home Allowance" id="empHomeAllowance">
 </div>
 
 <div class="form-field">
 <label>Travel Allowance</label>
-<input id="empTravelAllowance">
+<input class="input-field" placeholder="Travel Allowance" id="empTravelAllowance">
 </div>
 
 <div class="form-field">
 <label>Mobile Allowance</label>
-<input id="empMobileAllowance">
+<input class="input-field" placeholder="Mobile Allowance" id="empMobileAllowance">
 </div>
 
 <div class="form-field">
 <label>Commission</label>
-<input id="empCommission">
+<input class="input-field" placeholder="Commission" id="empCommission">
 </div>
 
 <div class="form-field">
 <label>Effective Date</label>
-<input type="date" id="empSalaryEffective">
+<div class="date-field">
+<input type="text" class="date-input" id="empSalaryEffective" placeholder="Effective Date">
+<span class="calendar-icon">📅</span>
+</div>
 </div>
 
 </div>
@@ -188,22 +194,22 @@ Bank Details
 
 <div class="form-field">
 <label>Account Title</label>
-<input id="empAccountTitle">
+<input class="input-field" placeholder="Account Title" id="empAccountTitle">
 </div>
 
 <div class="form-field">
 <label>Bank Name</label>
-<input id="empBankName">
+<input class="input-field" placeholder="Bank Name" id="empBankName">
 </div>
 
 <div class="form-field">
 <label>Account Number</label>
-<input id="empAccountNumber">
+<input class="input-field" placeholder="Account Number" id="empAccountNumber">
 </div>
 
 <div class="form-field">
 <label>IBAN</label>
-<input id="empIban">
+<input class="input-field" placeholder="IBAN" id="empIban">
 </div>
 
 </div>
@@ -234,59 +240,6 @@ Cancel
 let editingHolidayId = null;
 let currentEmployeeId=null
 
-function openPage(page,el){
-
-document.querySelectorAll(".menu li").forEach(li=>{
-li.classList.remove("active");
-});
-
-if(el) el.classList.add("active");
-
-const title = document.getElementById("pageTitle");
-
-if(page==="dashboard"){
-title.innerText="Dashboard";
-loadAdminDashboard();
-loadUpcomingHolidays();
-loadTeamCalendar();
-}
-
-if(page==="requests"){
-title.innerText="Leave Requests";
-renderRequestsPage();
-}
-
-if(page==="holidays"){
-title.innerText="Holiday Schedule";
-renderHolidayPage();
-}
-
-if(page==="manual"){
-title.innerText="Mark Leave";
-renderManualLeavePage();
-}
-
-if(page==="reports"){
-title.innerText="Reports";
-renderReportsPage();
-}
-
-if(page==="employees"){
-title.innerText="Employees";
-renderEmployeesPage();
-}
-
-if(page==="payroll"){
-title.innerText="Payroll";
-renderPayrollPage();
-}
-
-if(page==="payrollSettings"){
-title.innerText="Payroll Settings";
-renderPayrollSettingsPage();
-}
-
-}
 
 async function checkAdminAuth(){
 
@@ -316,66 +269,7 @@ document.querySelector(".sidebar")
 
 }
 
-async function loadAdminDashboard(){
 
-const { data: leaves } = await db
-.from("leave_requests")
-.select("*");
-
-let pending = leaves.filter(l => l.status === "pending").length;
-let approved = leaves.filter(l => l.status === "approved").length;
-let rejected = leaves.filter(l => l.status === "rejected").length;
-
-const html = `
-<div class="dashboard-grid">
-
-<div class="dash-card">
-Pending Requests
-<h2>${pending}</h2>
-</div>
-
-<div class="dash-card">
-Approved Leaves
-<h2>${approved}</h2>
-</div>
-
-<div class="dash-card">
-Rejected Requests
-<h2>${rejected}</h2>
-</div>
-
-</div>
-
-<div class="card upcoming-holidays">
-  <h3>Upcoming Holidays</h3>
-  <div id="holidayList"></div>
-</div>
-
-<h3>Employees On Leave Today</h3>
-
-<table id="todayLeaveTable">
-
-<thead>
-<tr>
-<th>Employee</th>
-<th>Leave Type</th>
-<th>Status</th>
-</tr>
-</thead>
-
-<tbody></tbody>
-
-</table>
-
-<div class="card team-calendar">
-<h3>Team Leave Calendar</h3>
-<div id="teamCalendar"></div>
-</div>
-`;
-
-document.getElementById("pageContent").innerHTML = html;
-loadTodayLeaves();
-}
 
 async function renderHolidayPage(){
 
@@ -388,11 +282,26 @@ const html = `
 
 <h3>Add Holiday</h3>
 
-<input type="text" id="holidayName" placeholder="Holiday Name">
+<div class="form-row">
 
-<input type="date" id="holidayDate">
+<div class="form-field">
+<label>Holiday Name</label>
+<input class="input-field" type="text" id="holidayName" placeholder="Holiday Name">
+</div>
 
+<div class="form-field">
+<label>Holiday Date</label>
+<div class="date-field">
+<input type="text" class="date-input" id="holidayDate" placeholder="Holiday Date">
+<span class="calendar-icon">📅</span>
+</div>
+</div>
+
+<div class="form-field">
 <button onclick="addHoliday()">Add Holiday</button>
+</div>
+
+</div>
 
 </div>
 
@@ -400,6 +309,7 @@ const html = `
 
 <h3>Holiday List</h3>
 
+<div class="table-wrapper">
 <table id="holidayTable">
 
 <thead>
@@ -413,7 +323,7 @@ const html = `
 <tbody></tbody>
 
 </table>
-
+</div>
 </div>
 
 </div>
@@ -421,6 +331,7 @@ const html = `
 
 document.getElementById("pageContent").innerHTML = html;
 loadHolidays();
+initAllDatePickers();
 }
 
 async function loadHolidays(){
@@ -557,27 +468,50 @@ document.getElementById("pageContent").innerHTML = `
 
 <h3>Mark Leave For Employee</h3>
 
-<label>Employee</label>
-<select id="empSelect">
-${options}
-</select>
+<div class="form-row">
 
-<label>Leave Type</label>
-<select id="leaveType"></select>
+<div class="form-field">
+  <label>Employee</label>
+  <div class="select-wrapper">
+    <select class="input-field select-field" id="empSelect">
+      ${options}
+    </select>
+  </div>
+</div>
 
+<div class="form-field">
+  <label>Leave Type</label>
+  <div class="select-wrapper">
+    <select class="input-field select-field" id="leaveType"></select>
+  </div>
+</div>
+
+<div class="form-field">
 <label>Start Date</label>
-<input type="date" id="startDate">
+<div class="date-field">
+<input type="text" class="date-input" id="startDate" placeholder="Start Date">
+<span class="calendar-icon">📅</span>
+</div>
+</div>
 
+<div class="form-field">
 <label>End Date</label>
-<input type="date" id="endDate">
+<div class="date-field">
+<input type="text" class="date-input" id="endDate" placeholder="End Date">
+<span class="calendar-icon">📅</span>
+</div>
+</div>
 
 <button onclick="adminApplyLeave()">Submit</button>
+
+</div>
 
 </div>
 
 `;
 
 loadLeaveTypes();
+initAllDatePickers();
 }
 
 async function loadLeaveTypes(){
@@ -635,151 +569,6 @@ return;
 showToast("Leave approved & email sent","success");
 
 renderRequestsPage();
-
-}
-
-async function loadUpcomingHolidays(){
-
-const today = new Date().toISOString().split("T")[0]
-
-const { data, erro } = await db
-.from("holidays")
-.select("*")
-.gte("holiday_date",today)
-.order("holiday_date",{ascending:true})
-.limit(5)
-
-const container = document.getElementById("holidayList")
-
-if(!container) return
-
-container.innerHTML=""
-
-data.forEach(h=>{
-
-container.innerHTML += `
-<div class="holiday-item">
-<div class="holiday-name">${h.name}</div>
-<div class="holiday-date">${h.holiday_date}</div>
-</div>
-`
-})
-}
-
-async function loadTodayLeaves(){
-
-const today = new Date().toISOString().split("T")[0]
-
-const { data: leaves } = await db
-.from("leave_requests")
-.select("*")
-.eq("status","approved")
-
-const { data: employees } = await db
-.from("employees")
-.select("auth_user_id,name")
-
-const { data: types } = await db
-.from("leave_types")
-.select("id,name")
-
-const typeMap={}
-types.forEach(t=>typeMap[t.id]=t.name)
-
-const empMap={}
-employees.forEach(e=>empMap[e.auth_user_id]=e.name)
-
-const body = document.querySelector("#todayLeaveTable tbody")
-
-body.innerHTML=""
-
-leaves.forEach(l=>{
-
-if(today>=l.start_date && today<=l.end_date){
-
-body.innerHTML+=`
-<tr>
-<td>${empMap[l.employee_id]}</td>
-<td>${typeMap[l.type_id]}</td>
-<td>Approved</td>
-</tr>
-`
-
-}
-
-})
-
-}
-
-async function loadTeamCalendar(){
-
-const { data: leaves } = await db
-.from("leave_requests")
-.select("*")
-.eq("status","approved")
-
-const { data: employees } = await db
-.from("employees")
-.select("auth_user_id,name")
-
-const today = new Date()
-
-let days=[]
-
-for(let i=0;i<7;i++){
-
-let d = new Date()
-d.setDate(today.getDate()+i)
-
-days.push(d.toISOString().split("T")[0])
-
-}
-
-const container=document.getElementById("teamCalendar")
-
-container.innerHTML=""
-
-let html=`<div class="calendar-grid">`
-
-html+=`<div></div>`
-
-days.forEach(d=>{
-html+=`<div class="calendar-header">${d.slice(5)}</div>`
-})
-
-employees.forEach(emp=>{
-
-html+=`<div class="calendar-name">${emp.name}</div>`
-
-days.forEach(day=>{
-
-let onLeave=false
-
-leaves.forEach(l=>{
-
-if(
-l.employee_id===emp.auth_user_id &&
-day>=l.start_date &&
-day<=l.end_date
-){
-onLeave=true
-}
-
-})
-
-html+=`
-<div class="calendar-day ${onLeave?"calendar-leave":""}">
-${onLeave?"L":""}
-</div>
-`
-
-})
-
-})
-
-html+=`</div>`
-
-container.innerHTML=html
 
 }
 
@@ -937,38 +726,47 @@ document.getElementById("pageContent").innerHTML = `
 <div class="filters-bar">
 <div class="filters">
 
-<select id="statusFilter" onchange="loadRequests()">
+<div class="select-wrapper">
+<select class="input-field select-field" id="statusFilter" onchange="loadRequests()">
 <option value="all">All</option>
 <option value="pending">Pending</option>
 <option value="approved">Approved</option>
 <option value="rejected">Rejected</option>
 <option value="cancelled">Cancelled</option>
 </select>
+</div>
 
-<select id="employeeFilter" onchange="loadRequests()">
+<div class="select-wrapper">
+<select class="input-field select-field" id="employeeFilter" onchange="loadRequests()">
 <option value="all">All Employees</option>
 </select>
+</div>
 
-<input type="date" id="fromDate" onchange="loadRequests()">
+<div class="date-field">
+<input type="text" class="date-input" id="fromDate" placeholder="From Date" onchange="loadRequests()">
+<span class="calendar-icon">📅</span>
+</div>
 
-<input type="date" id="toDate" onchange="loadRequests()">
+<div class="date-field">
+<input type="text" class="date-input" id="toDate" placeholder="To Date" onchange="loadRequests()">
+<span class="calendar-icon">📅</span>
+</div>
 
-<select id="typeFilter" onchange="loadRequests()">
+<div class="select-wrapper">
+<select class="input-field select-field" id="typeFilter" onchange="loadRequests()">
 <option value="all">All Types</option>
 </select>
+</div>
 
-<select id="ptoFilter" onchange="loadRequests()">
+<div class="select-wrapper">
+<select class="input-field select-field" id="ptoFilter" onchange="loadRequests()">
 <option value="all">All</option>
 <option value="paid">Paid</option>
 <option value="unpaid">Unpaid</option>
 </select>
+</div>
 
-<input
-type="text"
-id="tableSearch"
-placeholder="Search Table..."
-onkeyup="filterTable()"
->
+<input class="input-field" type="text" id="tableSearch" placeholder="Search Table..." onkeyup="filterTable()">
 
 </div>
 </div>
@@ -1003,7 +801,7 @@ onkeyup="filterTable()"
 loadEmployeeFilter();
 loadTypeFilter();
 loadRequests();
-
+initAllDatePickers();
 }
 
 async function approve(id){
@@ -1177,16 +975,36 @@ document.getElementById("pageContent").innerHTML = `
 
 <div class="report-filters">
 
-<select id="rangeFilter" onchange="loadReports()">
-<option value="month">This Month</option>
+<div class="form-field">
+<label>Range</label>
+<div class="select-wrapper">
+<select class="input-field select-field" id="rangeFilter" onchange="loadReports()">
+<option value="month" selected>This Month</option>
 <option value="year">This Year</option>
 <option value="custom">Custom</option>
 </select>
+</div>
+</div>
 
-<input type="date" id="reportFrom" onchange="loadReports()">
-<input type="date" id="reportTo" onchange="loadReports()">
+<div class="form-field">
+<label>From Date</label>
+<div class="date-field">
+<input type="text" class="date-input" id="reportFrom" placeholder="From Date" onchange="loadReports()">
+<span class="calendar-icon">📅</span>
+</div>
+</div>
 
+<div class="form-field">
+<label>To Date</label>
+<div class="date-field">
+<input type="text" class="date-input" id="reportTo" placeholder="To Date" onchange="loadReports()">
+<span class="calendar-icon">📅</span>
+</div>
+</div>
+
+<div class="form-field">
 <button onclick="exportCSV()">Export CSV</button>
+</div>
 
 </div>
 
@@ -1214,6 +1032,7 @@ document.getElementById("pageContent").innerHTML = `
 <div id="leaveHeatmap" class="heatmap-grid"></div>
 
 <h4>Employee Leave Level</h4>
+<div class="table-wrapper">
 <table id="typeReport">
 <thead>
 <tr>
@@ -1223,7 +1042,9 @@ document.getElementById("pageContent").innerHTML = `
 </thead>
 <tbody></tbody>
 </table>
+</div>
 
+<div class="table-wrapper">
 <table id="empReport">
 <thead>
 <tr>
@@ -1234,6 +1055,7 @@ document.getElementById("pageContent").innerHTML = `
 </thead>
 <tbody></tbody>
 </table>
+</div>
 
 </div>
 
@@ -1243,6 +1065,7 @@ setTimeout(()=>{
 loadReports();
 },50);
 
+initAllDatePickers();
 }
 
 async function logout(){
@@ -1383,6 +1206,7 @@ document.getElementById("pageContent").innerHTML = `
 
 <h3>Employees</h3>
 
+<div class="table-wrapper">
 <table>
 
 <thead>
@@ -1401,11 +1225,12 @@ ${rows}
 </tbody>
 
 </table>
+</div>
 
 </div>
 
 `
-
+initAllDatePickers();
 }
 
 async function editEmployee(id){
@@ -1487,12 +1312,7 @@ Replace
 Upload
 </button>
 
-<input 
-type="file"
-class="upload-input"
-data-id="${p.id}"
-style="display:none"
->
+<input type="file" class="upload-input" data-id="${p.id}" style="display:none">
 
 </div>`
 }
@@ -1513,6 +1333,7 @@ document.getElementById("pageContent").innerHTML=`
 Generate Payroll
 </button>
 
+<div class="table-wrapper">
 <table>
 
 <thead>
@@ -1532,7 +1353,7 @@ ${rows}
 </tbody>
 
 </table>
-
+</div>
 </div>
 `
 
@@ -1712,6 +1533,7 @@ document.getElementById("empIban").value = bank.iban || ""
 
 document.getElementById("employeeModal").style.display="flex"
 
+initAllDatePickers()
 }
 
 })
@@ -1998,54 +1820,6 @@ return data.length > 0
 
 }
 
-// async function generatePayroll(){
-
-// const period = await calculatePayrollPeriod()
-// const monthName = new Date(period.start).toLocaleString('default',{month:'long',year:'numeric'})
-
-// const { data: employees } = await db
-// .from("employees")
-// .select("*")
-
-// for(const emp of employees){
-
-// const basic = emp.basic_salary || 0
-// const allowance = emp.allowance || 0
-
-// const unpaid = await calculateUnpaidLeaves(emp.auth_user_id,period.start,period.end)
-
-// const daily = basic / 26
-
-// const deduction = daily * unpaid
-
-// const finalSalary = basic + allowance - deduction
-
-// await db.from("payroll").insert({
-
-// employee_id:emp.auth_user_id,
-
-// payroll_month: monthName,
-// period_start:period.start,
-// period_end:period.end,
-
-// basic_salary:basic,
-// allowance:allowance,
-
-// unpaid_leaves:unpaid,
-// deduction:deduction,
-
-// final_salary:finalSalary
-
-// })
-
-// }
-
-// showToast("Payroll generated successfully","success")
-
-// renderPayrollPage()
-
-// }
-
 async function generatePayroll(){
 
 const period = await calculatePayrollPeriod()
@@ -2269,18 +2043,28 @@ document.getElementById("pageContent").innerHTML=`
 
 <h3>Payroll Settings</h3>
 
+<div class="form-row">
+
+<div class="form-field">
 <label>Cycle Start Day</label>
-<input id="cycleStart">
+<input class="input-field" placeholder="Cycle Start" id="cycleStart">
+</div>
 
+<div class="form-field">
 <label>Cycle End Day</label>
-<input id="cycleEnd">
+<input class="input-field" placeholder="Cycle End" id="cycleEnd">
+</div>
 
+<div class="form-field">
 <label>Disbursement Day</label>
-<input id="salaryDay">
+<input class="input-field" placeholder="Disbursement Day" id="salaryDay">
+</div>
 
-<button onclick="savePayrollSettings()">
-Save
-</button>
+<div class="form-field">
+<button onclick="savePayrollSettings()">Save</button>
+</div>
+
+</div>
 
 </div>
 `
@@ -2303,6 +2087,311 @@ effective_from:new Date()
 })
 
 showToast("Payroll Settings Saved","success")
+
+}
+
+function openPage(page,el){
+
+document.querySelectorAll(".menu li").forEach(li=>{
+li.classList.remove("active");
+});
+
+if(el) el.classList.add("active");
+
+const title = document.getElementById("pageTitle");
+
+if(page==="dashboard"){
+title.innerText="Dashboard";
+loadAdminDashboard();
+loadUpcomingHolidays();
+loadTeamCalendar();
+}
+
+if(page==="requests"){
+title.innerText="Leave Requests";
+renderRequestsPage();
+}
+
+if(page==="holidays"){
+title.innerText="Holiday Schedule";
+renderHolidayPage();
+}
+
+if(page==="manual"){
+title.innerText="Mark Leave";
+renderManualLeavePage();
+}
+
+if(page==="reports"){
+title.innerText="Reports";
+renderReportsPage();
+}
+
+if(page==="employees"){
+title.innerText="Employees";
+renderEmployeesPage();
+}
+
+if(page==="payroll"){
+title.innerText="Payroll";
+renderPayrollPage();
+}
+
+if(page==="payrollSettings"){
+title.innerText="Payroll Settings";
+renderPayrollSettingsPage();
+}
+
+}
+
+async function renderDashboard(){
+
+await loadAdminDashboard()
+await loadUpcomingHolidays()
+await loadTeamCalendar()
+
+}
+
+async function loadAdminDashboard(){
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*");
+
+let pending = leaves.filter(l => l.status === "pending").length;
+let approved = leaves.filter(l => l.status === "approved").length;
+let rejected = leaves.filter(l => l.status === "rejected").length;
+
+const html = `
+<div class="dashboard-grid">
+
+<div class="dash-card">
+Pending Requests
+<h2>${pending}</h2>
+</div>
+
+<div class="dash-card">
+Approved Leaves
+<h2>${approved}</h2>
+</div>
+
+<div class="dash-card">
+Rejected Requests
+<h2>${rejected}</h2>
+</div>
+
+</div>
+
+<div class="card upcoming-holidays">
+  <h3>Upcoming Holidays</h3>
+  <div id="holidayList"></div>
+</div>
+
+<h3>Employees On Leave Today</h3>
+
+<div class="table-wrapper">
+<table id="todayLeaveTable">
+
+<thead>
+<tr>
+<th>Employee</th>
+<th>Leave Type</th>
+<th>Status</th>
+</tr>
+</thead>
+
+<tbody></tbody>
+
+</table>
+</div>
+
+<div class="card team-calendar">
+<h3>Team Leave Calendar</h3>
+<div id="teamCalendar"></div>
+</div>
+`;
+
+document.getElementById("pageContent").innerHTML = html;
+loadTodayLeaves();
+initAllDatePickers();
+}
+
+async function loadTodayLeaves(){
+
+const today = new Date().toISOString().split("T")[0]
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*")
+.eq("status","approved")
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name")
+
+const { data: types } = await db
+.from("leave_types")
+.select("id,name")
+
+const typeMap={}
+types.forEach(t=>typeMap[t.id]=t.name)
+
+const empMap={}
+employees.forEach(e=>empMap[e.auth_user_id]=e.name)
+
+const body = document.querySelector("#todayLeaveTable tbody")
+
+body.innerHTML=""
+
+leaves.forEach(l=>{
+
+if(today>=l.start_date && today<=l.end_date){
+
+body.innerHTML+=`
+<tr>
+<td>${empMap[l.employee_id]}</td>
+<td>${typeMap[l.type_id]}</td>
+<td>Approved</td>
+</tr>
+`
+
+}
+
+})
+
+}
+
+async function loadUpcomingHolidays(){
+
+const today = new Date().toISOString().split("T")[0]
+
+const { data, erro } = await db
+.from("holidays")
+.select("*")
+.gte("holiday_date",today)
+.order("holiday_date",{ascending:true})
+.limit(5)
+
+const container = document.getElementById("holidayList")
+
+if(!container) return
+
+container.innerHTML=""
+
+data.forEach(h=>{
+
+container.innerHTML += `
+<div class="holiday-item">
+<div class="holiday-name">${h.name}</div>
+<div class="holiday-date">${h.holiday_date}</div>
+</div>
+`
+})
+}
+
+async function loadTeamCalendar(){
+
+const { data: leaves } = await db
+.from("leave_requests")
+.select("*")
+.eq("status","approved")
+
+const { data: employees } = await db
+.from("employees")
+.select("auth_user_id,name")
+
+const today = new Date()
+
+let days=[]
+
+for(let i=0;i<7;i++){
+
+let d = new Date()
+d.setDate(today.getDate()+i)
+
+days.push(d.toISOString().split("T")[0])
+
+}
+
+const container=document.getElementById("teamCalendar")
+
+container.innerHTML=""
+
+let html=`<div class="calendar-grid">`
+
+html+=`<div></div>`
+
+days.forEach(d=>{
+html+=`<div class="calendar-header">${d.slice(5)}</div>`
+})
+
+employees.forEach(emp=>{
+
+html+=`<div class="calendar-name">${emp.name}</div>`
+
+days.forEach(day=>{
+
+let onLeave=false
+
+leaves.forEach(l=>{
+
+if(
+l.employee_id===emp.auth_user_id &&
+day>=l.start_date &&
+day<=l.end_date
+){
+onLeave=true
+}
+
+})
+
+html+=`
+<div class="calendar-day ${onLeave?"calendar-leave":""}">
+${onLeave?"L":""}
+</div>
+`
+
+})
+
+})
+
+html+=`</div>`
+
+container.innerHTML=html
+
+}
+
+function initAllDatePickers(){
+
+  document.querySelectorAll(".date-input").forEach(input => {
+
+    /* destroy old instance */
+    if(input._flatpickr){
+      input._flatpickr.destroy();
+    }
+
+    /* init flatpickr */
+    flatpickr(input,{
+      dateFormat:"Y-m-d",
+      disable:[
+        function(date){
+          return date.getDay() === 0;
+        }
+      ]
+    });
+
+    /* icon click */
+    const icon = input.parentElement.querySelector(".calendar-icon");
+
+    if(icon){
+      icon.style.cursor = "pointer";
+
+      icon.onclick = () => {
+        input._flatpickr.open();
+      };
+    }
+
+  });
 
 }
 

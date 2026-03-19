@@ -118,6 +118,7 @@ background:white;
 padding:20px;
 border-radius:12px;
 box-shadow:0 4px 12px rgba(0,0,0,0.05);
+margin-bottom: 20px;
 }
 
 .primary-btn{
@@ -140,4 +141,163 @@ color:white;
 
 .success-btn{
 background:#16a34a;
+}
+
+/* ===== GLOBAL INPUT DESIGN ===== */
+
+.input-field {
+  width: auto !important;
+  min-width: 200px;
+  max-width: 280px;
+  padding: 12px 14px;
+  font-size: 14px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+
+  background: #f9fafb;
+
+  transition: all 0.2s ease;
+}
+
+/* focus state */
+.input-field:focus {
+  outline: none;
+  border-color: #4f46e5;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* placeholder */
+.input-field::placeholder {
+  color: #9ca3af;
+}
+
+/* spacing fix */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* dropdown base */
+.select-field {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+
+  cursor: pointer;
+
+  background-color: #f9fafb;
+  color: #111827;   /* IMPORTANT */
+
+  width: auto !important;
+  min-width: 200px;
+  max-width: 280px;
+}
+
+/* arrow add karne ke liye wrapper */
+.select-wrapper {
+  position: relative;
+}
+
+/* custom arrow */
+.select-wrapper::after {
+  content: "▾";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* spacing for arrow */
+.select-wrapper .select-field {
+  padding-right: 35px;
+}
+
+.select-field:focus {
+  outline: none;
+  border-color: #4f46e5;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.select-field option {
+  color: #111827;
+}
+
+
+
+.date-field{
+position:relative;
+width: auto !important;
+min-width: 200px;
+max-width: 280px;
+}
+
+.date-field input{
+width:100%;
+padding:10px 38px 10px 12px;
+border:1px solid #ddd;
+border-radius:8px;
+font-size:14px;
+}
+
+/* ===== FORM ROW SYSTEM ===== */
+
+.form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.form-row .form-field {
+  flex: 1;
+  min-width: 200px;
+}
+
+.form-row .button-field {
+  flex: 0;
+}
+
+.form-row button {
+  height: 35px;
+  padding: 0 16px;
+}
+
+/* ===== FIX SELECT IN FORM ROW ===== */
+
+.form-row .select-wrapper {
+  width: 100%;
+}
+
+.form-row .select-field {
+  width: 100% !important;
+  max-width: 100%;
+}
+
+/* ===== TABLE RESPONSIVE SYSTEM ===== */
+
+.table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table-wrapper table {
+  min-width: 900px;
+}
+
+/* ===== TABLE SCROLLBAR POLISH ===== */
+
+.table-wrapper::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-wrapper::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
 }
