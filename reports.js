@@ -7,263 +7,265 @@ return 0;
 }
 
 async function loadReports(){
+    const statsContainer = document.getElementById("statsCards");
 
-Chart.getChart("trendChart")?.destroy()
-Chart.getChart("typeChart")?.destroy()
-Chart.getChart("utilGauge")?.destroy()  
+    // ❌ If reports page not active → exit
+    if(!statsContainer) return;
 
-const range = document.getElementById("rangeFilter")?.value || "month"
+    showLoader("Loading reports...");
 
-const fromInput = document.getElementById("reportFrom")?.value
-const toInput = document.getElementById("reportTo")?.value
+    Chart.getChart("trendChart")?.destroy()
+    Chart.getChart("typeChart")?.destroy()
+    Chart.getChart("utilGauge")?.destroy()  
 
-const today = new Date()
+    const range = document.getElementById("rangeFilter")?.value || "month"
 
-let startDate
-let endDate = today
+    const fromInput = document.getElementById("reportFrom")?.value
+    const toInput = document.getElementById("reportTo")?.value
 
-if(range==="month"){
-startDate = new Date(today.getFullYear(),today.getMonth(),1)
-}
+    const today = new Date()
 
-if(range==="year"){
-startDate = new Date(today.getFullYear(),0,1)
-}
+    let startDate
+    let endDate = today
 
-if(range==="custom" && fromInput && toInput){
-startDate = new Date(fromInput)
-endDate = new Date(toInput)
-}
+    if(range==="month"){
+    startDate = new Date(today.getFullYear(),today.getMonth(),1)
+    }
 
-if(!startDate){
-startDate = new Date(2026,0,1)
-}
+    if(range==="year"){
+    startDate = new Date(today.getFullYear(),0,1)
+    }
 
-const { data: leaves } = await db
-.from("leave_requests")
-.select("*")
+    if(range==="custom" && fromInput && toInput){
+    startDate = new Date(fromInput)
+    endDate = new Date(toInput)
+    }
 
-const { data: employees } = await db
-.from("employees")
-.select("auth_user_id,name")
+    if(!startDate){
+    startDate = new Date(2026,0,1)
+    }
 
-const { data: types } = await db
-.from("leave_types")
-.select("id,name,yearly_quota")
+    const { data: leaves } = await db
+    .from("leave_requests")
+    .select("*")
 
-if(!leaves) return
+    const { data: employees } = await db
+    .from("employees")
+    .select("auth_user_id,name")
 
-/* FILTER BY DATE */
+    const { data: types } = await db
+    .from("leave_types")
+    .select("id,name,yearly_quota")
 
-const filtered = leaves.filter(l=>{
+    if(!leaves) return
 
-const d = new Date(l.start_date)
+    /* FILTER BY DATE */
 
-return d >= startDate && d <= endDate && l.status !== "cancelled"
+    const filtered = leaves.filter(l=>{
 
-})
+    const d = new Date(l.start_date)
 
-/* STATS */
+    return d >= startDate && d <= endDate && l.status !== "cancelled"
 
-let totalDays = 0
-let totalRequests = 0
-let pendingRequests = 0
-let approvedDays = 0
-let rejectedDays = 0
-let rejected = 0
-let approved = 0
-let unpaid = 0
-let paid = 0
+    })
 
-filtered.forEach(l=>{
+    /* STATS */
 
-totalDays += l.days || 0
-totalRequests += 1
-if(l.status==="pending") pendingRequests += 1
-if(l.status==="approved") approvedDays += l.days || 0
-if(l.status==="rejected") rejectedDays += l.days || 0
-if(l.status==="approved") approved += 1
-if(l.status==="rejected") rejected += 1
-if(l.is_pto===false && l.status==="approved") unpaid += l.days || 0
-if(l.is_pto===true && l.status==="approved") paid += l.days || 0
+    let totalDays = 0
+    let totalRequests = 0
+    let pendingRequests = 0
+    let approvedDays = 0
+    let rejectedDays = 0
+    let rejected = 0
+    let approved = 0
+    let unpaid = 0
+    let paid = 0
 
-})
+    filtered.forEach(l=>{
 
-const statsContainer = document.getElementById("statsCards");
+    totalDays += l.days || 0
+    totalRequests += 1
+    if(l.status==="pending") pendingRequests += 1
+    if(l.status==="approved") approvedDays += l.days || 0
+    if(l.status==="rejected") rejectedDays += l.days || 0
+    if(l.status==="approved") approved += 1
+    if(l.status==="rejected") rejected += 1
+    if(l.is_pto===false && l.status==="approved") unpaid += l.days || 0
+    if(l.is_pto===true && l.status==="approved") paid += l.days || 0
 
-if(!statsContainer) return;
+    })
 
-statsContainer.innerHTML = `
-<div class="stat-card">
-<span>Total Days</span>
-<h2>${totalDays}</h2>
-</div>
+    statsContainer.innerHTML = `
+    <div class="stat-card">
+    <span>Total Days</span>
+    <h2>${totalDays}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Total Requests</span>
-<h2>${totalRequests}</h2>
-</div>
+    <div class="stat-card">
+    <span>Total Requests</span>
+    <h2>${totalRequests}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Pending Requests</span>
-<h2>${pendingRequests}</h2>
-</div>
+    <div class="stat-card">
+    <span>Pending Requests</span>
+    <h2>${pendingRequests}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Approved Requests</span>
-<h2>${approved}</h2>
-</div>
+    <div class="stat-card">
+    <span>Approved Requests</span>
+    <h2>${approved}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Rejected Requests</span>
-<h2>${rejected}</h2>
-</div>
+    <div class="stat-card">
+    <span>Rejected Requests</span>
+    <h2>${rejected}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Approved Days</span>
-<h2>${approvedDays}</h2>
-</div>
+    <div class="stat-card">
+    <span>Approved Days</span>
+    <h2>${approvedDays}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Rejected Days</span>
-<h2>${rejectedDays}</h2>
-</div>
+    <div class="stat-card">
+    <span>Rejected Days</span>
+    <h2>${rejectedDays}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Unpaid Days</span>
-<h2>${unpaid}</h2>
-</div>
+    <div class="stat-card">
+    <span>Unpaid Days</span>
+    <h2>${unpaid}</h2>
+    </div>
 
-<div class="stat-card">
-<span>Paid Days</span>
-<h2>${paid}</h2>
-</div>
-`
+    <div class="stat-card">
+    <span>Paid Days</span>
+    <h2>${paid}</h2>
+    </div>
+    `
 
-/* TYPE USAGE */
+    /* TYPE USAGE */
 
-const typeUsage = {}
+    const typeUsage = {}
 
-filtered.forEach(l=>{
+    filtered.forEach(l=>{
 
-if(l.status==="approved"){
+    if(l.status==="approved"){
 
-if(!typeUsage[l.type_id]) typeUsage[l.type_id]=0
+    if(!typeUsage[l.type_id]) typeUsage[l.type_id]=0
 
-typeUsage[l.type_id]+=l.days || 0
+    typeUsage[l.type_id]+=l.days || 0
 
-}
+    }
 
-})
+    })
 
-const typeNames=[]
-const typeValues=[]
+    const typeNames=[]
+    const typeValues=[]
 
-types.forEach(t=>{
+    types.forEach(t=>{
 
-typeNames.push(t.name)
-typeValues.push(typeUsage[t.id] || 0)
+    typeNames.push(t.name)
+    typeValues.push(typeUsage[t.id] || 0)
 
-})
+    })
 
-renderTypeChart(typeValues,typeNames)
+    renderTypeChart(typeValues,typeNames)
 
-/* UTILIZATION */
+    /* UTILIZATION */
 
-const totalQuota = types.reduce((sum,t)=>sum+Number(t.yearly_quota),0)
-const usedQuota = approvedDays
+    const totalQuota = types.reduce((sum,t)=>sum+Number(t.yearly_quota),0)
+    const usedQuota = approvedDays
 
-renderUtilGauge(usedQuota,totalQuota)
+    renderUtilGauge(usedQuota,totalQuota)
 
-/* TREND */
+    /* TREND */
 
-const monthly = new Array(12).fill(0)
+    const monthly = new Array(12).fill(0)
 
-filtered.forEach(l=>{
+    filtered.forEach(l=>{
 
-if(l.status==="approved"){
+    if(l.status==="approved"){
 
-const d = new Date(l.start_date)
+    const d = new Date(l.start_date)
 
-monthly[d.getMonth()] += l.days || 0
+    monthly[d.getMonth()] += l.days || 0
 
-}
+    }
 
-})
+    })
 
-new Chart(document.getElementById("trendChart"),{
+    new Chart(document.getElementById("trendChart"),{
 
-type:"line",
+    type:"line",
 
-data:{
-labels:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-datasets:[{
-label:"Leave Days",
-data:monthly,
-tension:0.3
-}]
-}
+    data:{
+    labels:["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
+    datasets:[{
+    label:"Leave Days",
+    data:monthly,
+    tension:0.3
+    }]
+    }
 
-})
+    })
 
-/* HEATMAP */
+    /* HEATMAP */
 
-renderHeatmap(filtered)
+    renderHeatmap(filtered)
 
-/* TOP EMPLOYEES */
+    /* TOP EMPLOYEES */
 
-const empUsage={}
+    const empUsage={}
 
-filtered.forEach(l=>{
+    filtered.forEach(l=>{
 
-if(l.status==="approved"){
+    if(l.status==="approved"){
 
-if(!empUsage[l.employee_id]) empUsage[l.employee_id]=0
+    if(!empUsage[l.employee_id]) empUsage[l.employee_id]=0
 
-empUsage[l.employee_id]+=l.days || 0
+    empUsage[l.employee_id]+=l.days || 0
 
-}
+    }
 
-})
+    })
 
-const ranking = Object.entries(empUsage)
-.map(([id,days])=>({id,days}))
-.sort((a,b)=>b.days-a.days)
+    const ranking = Object.entries(empUsage)
+    .map(([id,days])=>({id,days}))
+    .sort((a,b)=>b.days-a.days)
 
-const empBody = document.querySelector("#empReport tbody")
+    const empBody = document.querySelector("#empReport tbody")
 
-empBody.innerHTML=""
+    empBody.innerHTML=""
 
-ranking.forEach((r,i)=>{
+    ranking.forEach((r,i)=>{
 
-const name = employees.find(e=>e.auth_user_id===r.id)?.name || "Unknown"
+    const name = employees.find(e=>e.auth_user_id===r.id)?.name || "Unknown"
 
-let level="Normal"
+    let level="Normal"
 
-if(r.days>20) level="High"
-else if(r.days>10) level="Medium"
+    if(r.days>20) level="High"
+    else if(r.days>10) level="Medium"
 
-empBody.innerHTML+=`
+    empBody.innerHTML+=`
 
-<tr>
-<td>#${i+1} ${name}</td>
-<td>${r.days}</td>
-<td>${level}</td>
-</tr>
+    <tr>
+    <td>#${i+1} ${name}</td>
+    <td>${r.days}</td>
+    <td>${level}</td>
+    </tr>
 
-`
+    `
 
-})
+    })
 
-const rangeEl = document.getElementById("rangeFilter");
+    const rangeEl = document.getElementById("rangeFilter");
 
-if(rangeEl){
-  rangeEl.style.display = "none";
-  rangeEl.offsetHeight; // force reflow
-  rangeEl.style.display = "";
-}
+    if(rangeEl){
+      rangeEl.style.display = "none";
+      rangeEl.offsetHeight; // force reflow
+      rangeEl.style.display = "";
+    }
 
-
+    hideLoader();
 }
 
 function exportCSV(){

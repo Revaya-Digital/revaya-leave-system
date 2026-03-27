@@ -11,7 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="supabase.js"></script>
+  <script src="supabase_client.js"></script>
   <script src="reports.js"></script>
 </head>
 
@@ -269,8 +269,6 @@ document.querySelector(".sidebar")
 
 }
 
-
-
 async function renderHolidayPage(){
 
 const html = `
@@ -339,7 +337,7 @@ async function loadHolidays(){
 const { data } = await db
 .from("holidays")
 .select("*")
-.order("holiday_date",{ascending:true})
+.order("created_at",{ascending:true})
 
 const body = document.querySelector("#holidayTable tbody")
 
@@ -532,44 +530,46 @@ dropdown.innerHTML += `<option value="${type.id}">${type.name}</option>`;
 }
 
 async function adminApplyLeave(){
+  showLoader("Submitting...");
 
-const emp = document.getElementById("empSelect").value;
-const type = document.getElementById("leaveType").value;
-const start = document.getElementById("startDate").value;
-const end = document.getElementById("endDate").value;
+  const emp = document.getElementById("empSelect").value;
+  const type = document.getElementById("leaveType").value;
+  const start = document.getElementById("startDate").value;
+  const end = document.getElementById("endDate").value;
 
-if(!emp || !type || !start || !end){
-alert("Please fill all fields");
-return;
-}
+  if(!emp || !type || !start || !end){
+    hideLoader();
+    alert("Please fill all fields");
+    return;
+  }
 
-const startDate = new Date(start);
-const endDate = new Date(end);
+  const startDate = new Date(start);
+  const endDate = new Date(end);
 
-const diffTime = Math.abs(endDate - startDate);
-const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  const diffTime = Math.abs(endDate - startDate);
+  const days = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
-const { error } = await db
-.from("leave_requests")
-.insert({
-employee_id: emp,
-type_id: type,
-start_date: start,
-end_date: end,
-days: days,
-status: "approved",
-is_pto: true
-});
+  const { error } = await db
+  .from("leave_requests")
+  .insert({
+  employee_id: emp,
+  type_id: type,
+  start_date: start,
+  end_date: end,
+  days: days,
+  status: "approved",
+  is_pto: true
+  });
 
-if(error){
-showToast(error.message,"error");
-return;
-}
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
 
-showToast("Leave approved & email sent","success");
-
-renderRequestsPage();
-
+  hideLoader();
+  showToast("Leave approved & email sent","success");
+  renderRequestsPage();
 }
 
 async function loadRequests(){
@@ -805,162 +805,168 @@ initAllDatePickers();
 }
 
 async function approve(id){
+  showLoader("Approving leave...");
 
-const { data: leave } = await db
-.from("leave_requests")
-.select("*")
-.eq("id",id)
-.single();
+  const { data: leave } = await db
+  .from("leave_requests")
+  .select("*")
+  .eq("id",id)
+  .single();
 
-const { data: emp } = await db
-.from("employees")
-.select("email,name,phone")
-.eq("auth_user_id",leave.employee_id)
-.single();
+  const { data: emp } = await db
+  .from("employees")
+  .select("email,name,phone")
+  .eq("auth_user_id",leave.employee_id)
+  .single();
 
-const commentBox = document.getElementById("c_"+id);
-const ptoSelect = document.querySelector(`input[name="pto_${id}"]:checked`);
+  const commentBox = document.getElementById("c_"+id);
+  const ptoSelect = document.querySelector(`input[name="pto_${id}"]:checked`);
 
-const { data: old } = await db
-.from("leave_requests")
-.select("is_pto, admin_comment")
-.eq("id",id)
-.single();
+  const { data: old } = await db
+  .from("leave_requests")
+  .select("is_pto, admin_comment")
+  .eq("id",id)
+  .single();
 
-const oldPTO = old.is_pto === true;
-const newPTO = ptoSelect && ptoSelect.value === "true";
+  const oldPTO = old.is_pto === true;
+  const newPTO = ptoSelect && ptoSelect.value === "true";
 
-let finalComment = old.admin_comment || "";
-const newComment = commentBox.value || "";
+  let finalComment = old.admin_comment || "";
+  const newComment = commentBox.value || "";
 
-if(newComment){
-finalComment += (finalComment ? " | " : "") + newComment;
-}
+  if(newComment){
+  finalComment += (finalComment ? " | " : "") + newComment;
+  }
 
-if(oldPTO !== newPTO){
-finalComment += (finalComment ? " | " : "") + "PTO changed by admin";
-}
+  if(oldPTO !== newPTO){
+  finalComment += (finalComment ? " | " : "") + "PTO changed by admin";
+  }
 
-const { error } = await db.from("leave_requests")
-.update({
-status:"approved",
-is_pto:newPTO,
-admin_comment:finalComment
-})
-.eq("id",id);
+  const { error } = await db.from("leave_requests")
+  .update({
+  status:"approved",
+  is_pto:newPTO,
+  admin_comment:finalComment
+  })
+  .eq("id",id);
 
-/* 🔔 EMAIL TRIGGER */
-try{
-const res = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":"Bearer " + SUPABASE_ANON_KEY,
-"apikey": SUPABASE_ANON_KEY
-},
-body: JSON.stringify({
-to: emp.email,
-subject: "Leave Approved",
-message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been approved.`
-})
-});
-}catch(e){
-showToast("System Error. Admin not Notified","error");
-}
+  /* 🔔 EMAIL TRIGGER */
+  try{
+  await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
+  method:"POST",
+  headers: await getAuthHeaders(),
+  body: JSON.stringify({
+  to: emp.email,
+  subject: "Leave Approved",
+  message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been approved.`
+  })
+  });
+  }catch(e){
+    hideLoader();
+    showToast("System Error. Admin not Notified","error");
+  }
 
-/* 📱 WHATSAPP TRIGGER */
-try{
-const wa = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-whatsapp",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":"Bearer " + SUPABASE_ANON_KEY,
-"apikey": SUPABASE_ANON_KEY
-},
-body: JSON.stringify({
-phone: emp.phone,
-message: `Leave Approved
-From: ${leave.start_date}
-To: ${leave.end_date}`
-})
-});
-}catch(e){
-showToast("System Error. Admin not Notified","error");
-}
+  try{
+  await logLeaveToSheet({
+  name: emp.name,
+  phone: emp.phone,
+  days: leave.days,
+  from_date: leave.start_date,
+  to_date: leave.end_date,
+  status: "approved"
+  });
+  }catch(e){
+    hideLoader();
+    showToast("Sheet log failed","error");
+  }
 
-if(error){
-showToast(error.message,"error");
-return;
-}
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
 
-showToast("Leave approved & email sent","success");
-loadRequests();
+  hideLoader();
+  showToast("Leave approved & email sent","success");
+  loadRequests();
 }
 
 async function reject(id){
+  showLoader("Rejecting leave...");
 
-const commentBox = document.getElementById("c_"+id);
+  const { data: leave } = await db
+  .from("leave_requests")
+  .select("*")
+  .eq("id",id)
+  .single();
 
-/* get old comment */
-const { data: old } = await db
-.from("leave_requests")
-.select("admin_comment")
-.eq("id",id)
-.single();
+  const { data: emp } = await db
+  .from("employees")
+  .select("email,name,phone")
+  .eq("auth_user_id",leave.employee_id)
+  .single();
 
-let finalComment = old.admin_comment || "";
-const newComment = commentBox.value || "";
+  const commentBox = document.getElementById("c_"+id);
 
-if(newComment){
-finalComment += (finalComment ? " | " : "") + newComment;
-}
+  const { data: old } = await db
+  .from("leave_requests")
+  .select("admin_comment")
+  .eq("id",id)
+  .single();
 
-const { error } = await db.from("leave_requests")
-.update({
-status:"rejected",
-admin_comment:finalComment
-})
-.eq("id",id);
+  let finalComment = old.admin_comment || "";
+  const newComment = commentBox.value || "";
 
-/* 🔔 EMAIL TRIGGER */
-try{
-const res = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":"Bearer " + SUPABASE_ANON_KEY,
-"apikey": SUPABASE_ANON_KEY
-},
-body: JSON.stringify({
-to: emp.email,
-subject: "Leave Rejected",
-message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been rejected.`
-})
-});
-}catch(e){
-showToast("System Error. Admin not Notified","error");
-}
+  if(newComment){
+  finalComment += (finalComment ? " | " : "") + newComment;
+  }
 
-/* 📱 WHATSAPP TRIGGER */
-await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-whatsapp",{
-  method:"POST",
-  headers:{
-    "Content-Type":"application/json",
-    "Authorization":"Bearer " + SUPABASE_ANON_KEY,
-    "apikey": SUPABASE_ANON_KEY
-  },
-  body: JSON.stringify({
-    phone: emp.phone,
-    message: `Leave Rejected\n\nFrom: ${leave.start_date}\nTo: ${leave.end_date}\nStatus: Approved`
+  const { error } = await db.from("leave_requests")
+  .update({
+  status:"rejected",
+  admin_comment:finalComment
   })
-});
-if(error){
-showToast("System Error. Admin not Notified","error");
-return;
-}
+  .eq("id",id);
 
-showToast("Leave Rejected","success");
-loadRequests();
+  /* 🔔 EMAIL TRIGGER */
+  try{
+  await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
+  method:"POST",
+  headers: await getAuthHeaders(),
+  body: JSON.stringify({
+  to: emp.email,
+  subject: "Leave Rejected",
+  message: `Hi ${emp.name}, your leave from ${leave.start_date} to ${leave.end_date} has been rejected.`
+  })
+  });
+  }catch(e){
+    hideLoader();
+    showToast("System Error. Admin not Notified","error");
+  }
+
+  try{
+  await logLeaveToSheet({
+  name: emp.name,
+  phone: emp.phone,
+  days: leave.days,
+  from_date: leave.start_date,
+  to_date: leave.end_date,
+  status: "rejected"
+  });
+  }catch(e){
+    hideLoader();
+    showToast("Sheet log failed","error");
+  }
+
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
+
+  hideLoader();
+  showToast("Leave Rejected","success");
+  loadRequests();
 }
 
 async function renderReportsPage(){
@@ -1074,37 +1080,40 @@ async function logout(){
 }
 
 async function adminCancel(id){
+  showLoader("Cancelling leave...");
 
-const commentBox = document.getElementById("c_"+id);
+  const commentBox = document.getElementById("c_"+id);
 
-/* get old comment */
-const { data: old } = await db
-.from("leave_requests")
-.select("admin_comment")
-.eq("id",id)
-.single();
+  /* get old comment */
+  const { data: old } = await db
+  .from("leave_requests")
+  .select("admin_comment")
+  .eq("id",id)
+  .single();
 
-let finalComment = old.admin_comment || "";
-const newComment = commentBox.value || "";
+  let finalComment = old.admin_comment || "";
+  const newComment = commentBox.value || "";
 
-if(newComment){
-finalComment += (finalComment ? " | " : "") + newComment;
-}
+  if(newComment){
+  finalComment += (finalComment ? " | " : "") + newComment;
+  }
 
-const { error } = await db.from("leave_requests")
-.update({
-status:"cancelled",
-admin_comment:finalComment
-})
-.eq("id",id);
+  const { error } = await db.from("leave_requests")
+  .update({
+  status:"cancelled",
+  admin_comment:finalComment
+  })
+  .eq("id",id);
 
-if(error){
-showToast(error.message,"error");
-return;
-}
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
 
-showToast("Leave Cancelled","success");
-loadRequests();
+  hideLoader();
+  showToast("Leave Cancelled","success");
+  loadRequests();
 }
 
 async function loadEmployeeFilter(){
@@ -1280,7 +1289,11 @@ rows+=`
 <td>${p.payroll_month}</td>
 <td>${p.period_start}</td>
 <td>${p.period_end}</td>
-<td>Rs ${Number(p.final_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.basic_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.home_allowance + p.travel_allowance + p.mobile_allowance).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.commission).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.tax_amount).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.net_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
 <td>${p.payment_status}</td>
 
 <td>
@@ -1342,7 +1355,11 @@ Generate Payroll
 <th>Period</th>
 <th>Period Start</th>
 <th>Period End</th>
-<th>Salary</th>
+<th>Gross Salary</th>
+<th>Allowances</th>
+<th>Commission</th>
+<th>Tax Amount</th>
+<th>Net Salary</th>
 <th>Status</th>
 <th>Proof</th>
 </tr>
@@ -1498,7 +1515,7 @@ const { data: salary } = await db
 .select("*")
 .eq("employee_id",id)
 .lte("effective_date",new Date().toISOString().split("T")[0])
-.order("effective_date",{ascending:false})
+.order("created_at",{ascending:false})
 .limit(1)
 .single()
 
@@ -1706,16 +1723,123 @@ const { data, error } = await db
 .select("*")
 .eq("employee_id",empId)
 .lte("effective_date",effectiveDate)
-.order("effective_date",{ascending:false})
+.order("created_at",{ascending:false})
 .limit(1)
 .single()
 
 if(error){
-console.error(error)
+showToast(error,"error")
 return null
 }
 
 return data
+}
+
+function getTaxYear(date){
+
+const d = new Date(date)
+const year = d.getFullYear()
+const month = d.getMonth() + 1
+
+/* Pakistan style July to June */
+
+return month >= 7 ? year + 1 : year
+
+}
+
+async function estimateAnnualIncome(empId, currentMonthSalary, taxYear, periodStartDate){
+
+const { data: payrolls } = await db
+.from("payroll")
+.select("gross_salary")
+.eq("employee_id",empId)
+.eq("tax_year",taxYear)
+
+let ytd = 0
+
+payrolls.forEach(p=>{
+ytd += Number(p.gross_salary || 0)
+})
+
+const payrollDate = new Date(periodStartDate)
+const month = payrollDate.getMonth() + 1
+
+let monthsPassed
+
+if(month >= 7){
+monthsPassed = month - 6
+}else{
+monthsPassed = month + 6
+}
+
+const remainingMonths = 12 - monthsPassed + 1
+
+const projected = currentMonthSalary * remainingMonths
+
+return ytd + projected
+
+}
+
+async function calculateTax(annualIncome){
+
+const today = new Date().toISOString().split("T")[0]
+
+const { data: slabs } = await db
+.from("tax_slabs")
+.select("*")
+.lte("effective_from",today)
+.gte("effective_to",today)
+.order("min_income",{ascending:true})
+
+let tax = 0
+let breakdown = []
+
+for(const slab of slabs){
+
+if(annualIncome <= slab.min_income) break
+
+const upper = slab.max_income || annualIncome
+
+const taxable = Math.min(annualIncome, upper) - slab.min_income
+
+if(taxable <= 0) continue
+
+const slabTax = taxable * slab.tax_rate
+
+tax += slabTax
+
+breakdown.push({
+min: slab.min_income,
+max: slab.max_income,
+rate: slab.tax_rate,
+tax: slabTax
+})
+
+}
+
+return {
+tax: Number(tax.toFixed(2)),
+breakdown
+}
+
+}
+
+async function getTaxPaid(empId, taxYear){
+
+const { data: payrolls } = await db
+.from("payroll")
+.select("tax_amount")
+.eq("employee_id",empId)
+.eq("tax_year",taxYear)
+
+let paid = 0
+
+payrolls.forEach(p=>{
+paid += Number(p.tax_amount || 0)
+})
+
+return paid
+
 }
 
 async function calculatePayrollPeriod(){
@@ -1723,7 +1847,7 @@ async function calculatePayrollPeriod(){
 const { data: settings } = await db
 .from("payroll_settings")
 .select("*")
-.order("effective_from",{ascending:false})
+.order("created_at",{ascending:false})
 .limit(1)
 .single()
 
@@ -1755,7 +1879,7 @@ const { data, error } = await db
 .gte("end_date",start)
 
 if(error){
-console.error(error)
+showToast(error,"error")
 return 0
 }
 
@@ -1889,7 +2013,55 @@ const deduction = Number((dailyRate * unpaid).toFixed(2))
 
 const earnedSalary = Number((dailyRate * workedDays).toFixed(2))
 
-const finalSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
+// const finalSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
+
+const grossSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
+
+const taxYear = getTaxYear(period.start)
+
+/* annual projection */
+const annualIncome = await estimateAnnualIncome(emp.auth_user_id, grossSalary, taxYear, period.start)
+
+/* total tax liability */
+const taxResult = await calculateTax(annualIncome)
+const annualTax = taxResult.tax
+
+/* already deducted */
+const taxPaid = await getTaxPaid(emp.auth_user_id, taxYear)
+
+/* remaining months */
+const payrollDate = new Date(period.start)
+const month = payrollDate.getMonth() + 1
+
+let monthsPassed
+
+if(month >= 7){
+monthsPassed = month - 6
+}else{
+monthsPassed = month + 6
+}
+
+const remainingMonths = 12 - monthsPassed + 1
+
+/* 🔥 BALANCING */
+let remainingTax = annualTax - taxPaid
+
+if(remainingTax < 0){
+remainingTax = 0
+}
+
+const monthlyTax = Number((remainingTax / remainingMonths).toFixed(2))
+
+const netSalary = Number((grossSalary - monthlyTax).toFixed(2))
+
+const taxSnapshot = {
+annual_income: annualIncome,
+annual_tax: annualTax,
+tax_paid: taxPaid,
+remaining_tax: remainingTax,
+monthly_tax: monthlyTax,
+breakdown: taxResult.breakdown
+}
 
 /* save payroll */
 
@@ -1914,7 +2086,16 @@ unpaid_leaves:unpaid,
 
 deduction:deduction,
 
-final_salary:finalSalary
+// final_salary:finalSalary
+gross_salary:grossSalary,
+tax_amount:monthlyTax,
+net_salary:netSalary,
+
+annual_income_estimate:annualIncome,
+annual_tax:annualTax,
+
+tax_year:taxYear,
+tax_snapshot:taxSnapshot
 
 })
 
@@ -1974,7 +2155,7 @@ doc.text("Unpaid Leaves: "+payroll.unpaid_leaves,20,80)
 
 doc.text("Deduction: "+payroll.deduction,20,90)
 
-doc.text("Final Salary: "+payroll.final_salary,20,110)
+doc.text("Final Salary: "+payroll.net_salary,20,110)
 
 doc.save("payslip.pdf")
 
@@ -1999,7 +2180,7 @@ rows+=`
 <tr>
 <td>${p.period_start}</td>
 <td>${p.period_end}</td>
-<td>Rs ${Number(p.final_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+<td>Rs ${Number(p.net_salary).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
 
 <td>
 
@@ -2269,7 +2450,7 @@ const { data, erro } = await db
 .from("holidays")
 .select("*")
 .gte("holiday_date",today)
-.order("holiday_date",{ascending:true})
+.order("created_at",{ascending:true})
 .limit(5)
 
 const container = document.getElementById("holidayList")
@@ -2400,5 +2581,16 @@ openPage("dashboard");
 </script>
 
 <div id="toastContainer"></div>
+
+<div id="globalLoader" class="loader-overlay">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <p id="loaderText">Processing...</p>
+  </div>
+</div>
+
 </body>
 </html>
+
+
+

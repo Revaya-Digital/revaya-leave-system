@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="supabase.js"></script>
+  <script src="supabase_client.js"></script>
 </head>
 
 
@@ -246,7 +246,7 @@ rows+=`
 
 <td>${p.period_start}</td>
 <td>${p.period_end}</td>
-<td>${p.final_salary}</td>
+<td>${p.net_salary}</td>
 
 <td>
 <button onclick='generatePayslip(${JSON.stringify(p)})'>
@@ -264,109 +264,204 @@ document.getElementById("payslipTable").innerHTML=rows
 
 }
 
-function generatePayslip(payroll){
+async function generatePayslip(payroll){
+  showLoader("Generating payslip...");
+  const { jsPDF } = window.jspdf
 
-const { jsPDF } = window.jspdf
+  /* FETCH EMPLOYEE */
+  const { data: emp } = await db
+  .from("employees")
+  .select("name,email,job_title,department")
+  .eq("auth_user_id", payroll.employee_id)
+  .single()
 
-const doc = new jsPDF()
+  const doc = new jsPDF()
+  const left = 15
+  let y = 20
 
-doc.text("Salary Slip",20,20)
+  /* LOGO */
+  const img = new Image()
+  img.src = "Revaya_Logo_Transparent.png"
 
-doc.text("Period: "+payroll.period_start+" → "+payroll.period_end,20,40)
+  await new Promise(resolve => {
+    img.onload = resolve
+  })
 
-doc.text("Basic Salary: "+payroll.basic_salary,20,60)
-doc.text("Allowance: "+payroll.allowance,20,70)
+  doc.addImage(img, "PNG", 150, 10, 40, 15)
 
-doc.text("Unpaid Leaves: "+payroll.unpaid_leaves,20,80)
+  /* HEADER */
+  doc.setFontSize(18)
+  doc.text("Salary Slip", left, y)
 
-doc.text("Deduction: "+payroll.deduction,20,90)
+  y += 8
+  doc.setFontSize(10)
+  doc.text(`Period: ${payroll.period_start} to ${payroll.period_end}`, left, y)
 
-doc.text("Final Salary: "+payroll.final_salary,20,110)
+  y += 10
 
-doc.save("payslip.pdf")
+  /* EMPLOYEE INFO */
+  doc.setFontSize(12)
+  doc.text("Employee Details", left, y)
 
-}
+  y += 6
+  doc.setFontSize(10)
 
-async function loadLeaveTypes() {
-  const { data } = await db.from("leave_types").select("*");
+  doc.text(`Name: ${emp?.name || "-"}`, left, y)
+  y += 5
+  doc.text(`Designation: ${emp?.job_title || "-"}`, left, y)
+  y += 5
+  doc.text(`Department: ${emp?.department || "-"}`, left, y)
 
-  leaveType.innerHTML = "";
-  data.forEach(t => {
-    leaveType.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-  });
+  y += 10
+
+  /* ========================= */
+  /* EARNINGS TABLE */
+  /* ========================= */
+
+  doc.setFontSize(12)
+  doc.text("Earnings", left, y)
+
+  y += 6
+
+  const earnings = [
+  ["Basic Salary", payroll.basic_salary],
+  ["Home Allowance", payroll.home_allowance],
+  ["Travel Allowance", payroll.travel_allowance],
+  ["Mobile Allowance", payroll.mobile_allowance],
+  ["Commission", payroll.commission]
+  ]
+
+  earnings.forEach(row=>{
+  doc.rect(left, y, 120, 8)
+  doc.rect(left + 120, y, 60, 8)
+
+  doc.text(row[0], left + 2, y + 5)
+  doc.text(`Rs ${Number(row[1]).toLocaleString()}`, left + 122, y + 5)
+
+  y += 8
+  })
+
+  y += 8
+
+  /* ========================= */
+  /* DEDUCTIONS TABLE */
+  /* ========================= */
+
+  doc.setFontSize(12)
+  doc.text("Deductions", left, y)
+
+  y += 6
+
+  const deductions = [
+  ["Leave Deduction", payroll.deduction],
+  ["Tax", payroll.tax_amount]
+  ]
+
+  deductions.forEach(row=>{
+  doc.rect(left, y, 120, 8)
+  doc.rect(left + 120, y, 60, 8)
+
+  doc.text(row[0], left + 2, y + 5)
+  doc.text(`Rs ${Number(row[1]).toLocaleString()}`, left + 122, y + 5)
+
+  y += 8
+  })
+
+  y += 10
+
+  /* ========================= */
+  /* SUMMARY BOX */
+  /* ========================= */
+
+  doc.setDrawColor(0)
+  doc.rect(left, y, 180, 25)
+
+  doc.setFontSize(12)
+
+  y += 8
+  doc.text(`Gross Salary: Rs ${Number(payroll.gross_salary).toLocaleString()}`, left + 5, y)
+
+  y += 7
+  doc.text(`Net Salary: Rs ${Number(payroll.net_salary).toLocaleString()}`, left + 5, y)
+
+  y += 12
+
+  /* FOOTER */
+  doc.setFontSize(9)
+  doc.text("This is a system generated payslip", left, y)
+
+  doc.save(`Payslip_${payroll.period_start}.pdf`)
+  hideLoader();
+  }
+
+  async function loadLeaveTypes() {
+    const { data } = await db.from("leave_types").select("*");
+
+    leaveType.innerHTML = "";
+    data.forEach(t => {
+      leaveType.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    });
 }
 
 async function applyLeave() {
-const { data: userData } = await db.auth.getUser();
-const ptoValue = document.querySelector('input[name="ptoType"]:checked').value === "true";
-const isHalf = document.getElementById("isHalfDay").checked;
-const session = isHalf ? document.getElementById("halfDaySession").value : null;
-const { error } = await db.from("leave_requests").insert({
-employee_id: userData.user.id,
-type_id: leaveType.value,
-is_half_day: isHalf,
-half_day_session: session,
-start_date: startDate.value,
-end_date: endDate.value,
-is_pto: ptoValue
-});
-if(error){
-showToast(error.message,"error");
-return;
-}
+  showLoader("Submitting leave...");
+  const { data: userData } = await db.auth.getUser();
+  const ptoValue = document.querySelector('input[name="ptoType"]:checked').value === "true";
+  const isHalf = document.getElementById("isHalfDay").checked;
+  const session = isHalf ? document.getElementById("halfDaySession").value : null;
+  const { data, error } = await db.from("leave_requests").insert({
+  employee_id: userData.user.id,
+  type_id: leaveType.value,
+  is_half_day: isHalf,
+  half_day_session: session,
+  start_date: startDate.value,
+  end_date: endDate.value,
+  is_pto: ptoValue
+  })
+  .select()
+  .single();
+  if(error){
+  hideLoader();
+  showToast(error.message,"error");
+  return;
+  }
 
-const { data: emp } = await db
-.from("employees")
-.select("name")
-.eq("auth_user_id", userData.user.id)
-.single();
+  const { data: sessionData } = await db.auth.getSession();
 
-const { data: admins } = await db
-.from("employees")
-.select("email,phone")
-.eq("role","admin")
-.single();
+  if (!sessionData.session) {
+    console.error("❌ No session found");
+    hideLoader();
+    showToast("Session expired. Please login again","error");
+    return;
+  }
 
-/* 🔔 EMAIL TRIGGER */
-await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-email",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":"Bearer " + SUPABASE_ANON_KEY,
-"apikey": SUPABASE_ANON_KEY
-},
-body: JSON.stringify({
-to: admins.email,
-subject: "New Leave Request",
-message: `${emp.name} applied leave from ${startDate.value} to ${endDate.value}`
-})
-});
+  const headers = {
+    "Content-Type": "application/json",
+    "Authorization": "Bearer " + sessionData.session.access_token,
+    "apikey": SUPABASE_ANON_KEY
+  };
 
+  await fetch("https://shecktyeqaqojhotysff.supabase.co/functions/v1/notify-leave-request", {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify({
+      leave_request_id: data?.id || data?.[0]?.id
+    })
+  });
 
-console.log
-/* 📱 WHATSAPP TRIGGER */
-try{
-const wa = await fetch("https://shecktyeqaqojhotysff.functions.supabase.co/send-whatsapp",{
-method:"POST",
-headers:{
-"Content-Type":"application/json",
-"Authorization":"Bearer " + SUPABASE_ANON_KEY,
-"apikey": SUPABASE_ANON_KEY
-},
-body: JSON.stringify({
-phone: admins.phone,
-message: `New Leave Request ${emp.name} ${startDate.value} → ${endDate.value}`})
-});
+  const { data: emp } = await db
+  .from("employees")
+  .select("name,phone,email")
+  .eq("auth_user_id", userData.user.id)
+  .single();
 
-console.log("WA status:", wa.status);
-console.log("WA response:", await wa.text());
-}catch(e){
-console.error("WA error:", e);
-}
+  const leaveDays = (document.getElementById("leaveDaysPreview").innerText || "")
+  .replace("Total Leave Days: ","")
+  .trim();
 
-
-showToast("Leave request submitted","success");
-loadRequests();
+  hideLoader();
+  showToast("Leave request submitted","success");
+  loadRequests();
 }
 
 async function loadRequests(){
@@ -517,21 +612,38 @@ box.style.display="none";
 }
 
 async function cancelLeave(id){
+  showLoader("Cancelling leave...");
+  const { error } = await db.from("leave_requests")
+  .update({ status:"cancelled" })
+  .eq("id",id);
 
-const { error } = await db.from("leave_requests")
-.update({ status:"cancelled" })
-.eq("id",id);
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
 
-console.log(error);
+  /* 🔥 GOOGLE SHEET UPDATE */
+  try{
+    await fetch(GOOGLE_SHEET_WEBHOOK_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      leave_id: id,
+      status: "cancelled"
+    })
+  });
 
-if(error){
-showToast(error.message,"error");
-return;
-}
-
-showToast("Leave request cancelled","success");
-loadRequests();
-loadLeaveBalance();
+  }catch(e){
+    hideLoader();
+    console.error("Sheet update failed", e);
+  }
+    hideLoader();
+    showToast("Leave request cancelled","success");
+    loadRequests();
+    loadLeaveBalance();
 }
 
 async function loadEmployeeTypeFilter(){
@@ -764,3 +876,11 @@ initPage();
 </script>
 
 <div id="toastContainer"></div>
+
+<div id="globalLoader" class="loader-overlay">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <p id="loaderText">Processing...</p>
+  </div>
+</div>
+

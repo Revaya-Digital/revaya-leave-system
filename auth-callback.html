@@ -3,7 +3,7 @@
 <title>Authenticating</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="supabase.js"></script>
+<script src="supabase_client.js"></script>
 
 </head>
 
@@ -68,5 +68,11 @@ handleAuth()
 
 </script>
 
+<div id="globalLoader" class="loader-overlay">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <p id="loaderText">Processing...</p>
+  </div>
+</div>
 </body>
 </html>

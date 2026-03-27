@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@23.0.10/build/js/intlTelInput.min.js"></script>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase.js"></script>
+  <script src="supabase_client.js"></script>
 </head>
 
 <div class="login-container">
@@ -332,3 +332,10 @@ showToast("Password reset link sent to email","success");
 </script>
 
 <div id="toastContainer"></div>
+
+<div id="globalLoader" class="loader-overlay">
+  <div class="loader-box">
+    <div class="spinner"></div>
+    <p id="loaderText">Processing...</p>
+  </div>
+</div>
