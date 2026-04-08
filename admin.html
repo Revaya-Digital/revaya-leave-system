@@ -51,6 +51,10 @@ Revaya <span>Admin</span>
 <i class="fa-solid fa-envelope-open-text"></i> Leave Requests
 </li>
 
+<li data-page="reimbursements" onclick="openPage('reimbursements', this)">
+  <i class="fa-solid fa-receipt"></i> Reimbursements
+</li>
+
 <li data-page="manual" onclick="openPage('manual',this)">
 <i class="fa-solid fa-user-check"></i> Mark Leave
 </li>
@@ -267,6 +271,177 @@ function toggleSidebar(){
 document.querySelector(".sidebar")
 .classList.toggle("open");
 
+}
+
+function renderReimbursementsPage(){
+
+  document.getElementById("pageContent").innerHTML = `
+
+    <div class="card">
+      <h3>Reimbursement Requests</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Employee</th>
+            <th>Amount</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Receipt</th>
+            <th>Comments</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody id="adminExpenseTable"></tbody>
+      </table>
+
+    </div>
+
+  `;
+  loadAllExpenses();
+}
+
+async function loadAllExpenses(){
+
+  const { data, error } = await db
+  .from("reimbursements")
+  .select("*")
+  .order("created_at",{ascending:false});
+
+  if(error){
+    console.error(error);
+    showToast(error.message,"error");
+    return;
+  }
+
+  if(!data){
+    document.getElementById("adminExpenseTable").innerHTML = "";
+    return;
+  }
+
+  let rows = "";
+
+  for (const e of data){
+
+    // 🔹 employee name fetch
+    let empName = "-";
+
+    const { data: emp } = await db
+    .from("employees")
+    .select("name")
+    .eq("auth_user_id", e.employee_id)
+    .single();
+
+    if(emp) empName = emp.name;
+
+    rows += `
+      <tr>
+        <td>${empName}</td>
+        <td>${e.amount}</td>
+        <td>${e.category}</td>
+        <td>
+          <span class="badge ${
+            e.status === "approved" ? "badge-good" :
+            e.status === "pending" ? "badge-pending" :
+            "badge-bad"
+          }">
+            ${e.status}
+          </span>
+        </td>
+        <td>
+          ${
+            e.receipt_url
+            ? `
+              ${
+                e.receipt_url.includes(".pdf")
+                ? `<span onclick="viewReceipt('${e.receipt_url}')" style="cursor:pointer">PDF</span>`
+                : `<img src="${e.receipt_url}" class="receipt-thumb" onclick="viewReceipt('${e.receipt_url}')">`
+              }
+            `
+            : "-"
+          }
+        </td>
+        <td>
+            ${e.admin_comment}
+          </span>
+        <td>
+          ${
+            e.status === "pending"
+            ? `
+              <input type="text" id="comment-${e.id}" placeholder="Add comment" class="input-field" style="width:140px; margin-bottom:6px;">
+
+              <div style="display:flex; gap:6px;">
+                <button class="success-btn" onclick="updateExpense('${e.id}','approved')">Approve</button>
+                <button class="danger-btn" onclick="updateExpense('${e.id}','rejected')">Reject</button>
+              </div>
+            `
+            : "-"
+          }
+        </td>
+      </tr>
+    `;
+  }
+
+  document.getElementById("adminExpenseTable").innerHTML = rows;
+}
+
+async function updateExpense(id,status){
+
+  const commentInput = document.getElementById(`comment-${id}`);
+  const comment = commentInput ? commentInput.value : "";
+
+  const { error } = await db
+  .from("reimbursements")
+  .update({
+    status: status,
+    admin_comment: comment
+  })
+  .eq("id",id);
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  showToast("Updated successfully","success");
+  loadAllExpenses();
+}
+
+function viewReceipt(url){
+
+  const modal = document.createElement("div");
+
+  modal.style.position = "fixed";
+  modal.style.top = "0";
+  modal.style.left = "0";
+  modal.style.width = "100%";
+  modal.style.height = "100%";
+  modal.style.background = "rgba(0,0,0,0.7)";
+  modal.style.display = "flex";
+  modal.style.alignItems = "center";
+  modal.style.justifyContent = "center";
+  modal.style.zIndex = "9999";
+
+  modal.innerHTML = `
+    <div style="background:white;padding:20px;border-radius:10px">
+
+      ${
+        url.includes(".pdf")
+        ? `<iframe src="${url}" style="width:70vw;height:70vh"></iframe>`
+        : `<img src="${url}" style="max-width:80vw;max-height:80vh">`
+      }
+
+      <br><br>
+
+      <button onclick="this.closest('div').parentElement.remove()">
+        Close
+      </button>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
 }
 
 async function renderHolidayPage(){
@@ -618,7 +793,7 @@ const { data: requests } = await query;
 
 const { data: approvedLeaves } = await db
 .from("leave_requests")
-.select("employee_id,type_id,days,start_date")
+.select("id,employee_id,type_id,days,start_date")
 .eq("status","approved");
 
 const { data: employees } = await db
@@ -671,8 +846,8 @@ if(remaining < 0) badgeClass = "badge-bad";
 let balanceBadge = `<span class="badge ${badgeClass}">${remaining}</span>`;
 
 const actionButtons =
-r.status === "pending"
-? `<button onclick="approve('${r.id}')">Approve</button>        <button onclick="reject('${r.id}')">Reject</button>`
+r.status === "pending" ? `<button class="success-btn" onclick="approve('${r.id}')">Approve</button>
+                          <button class="danger-btn" onclick="reject('${r.id}')">Reject</button>`
 : r.status === "approved"
 ? `<button onclick="adminCancel('${r.id}')">Cancel</button>`
 : `<span>-</span>`;
@@ -868,6 +1043,7 @@ async function approve(id){
 
   try{
   await logLeaveToSheet({
+  leave_id: leave.id,
   name: emp.name,
   phone: emp.phone,
   days: leave.days,
@@ -946,6 +1122,7 @@ async function reject(id){
 
   try{
   await logLeaveToSheet({
+  leave_id: leave.id,
   name: emp.name,
   phone: emp.phone,
   days: leave.days,
@@ -1082,9 +1259,20 @@ async function logout(){
 async function adminCancel(id){
   showLoader("Cancelling leave...");
 
+  const { data: leave } = await db
+  .from("leave_requests")
+  .select("*")
+  .eq("id",id)
+  .single();
+
+  const { data: emp } = await db
+  .from("employees")
+  .select("name,phone")
+  .eq("auth_user_id",leave.employee_id)
+  .single();
+
   const commentBox = document.getElementById("c_"+id);
 
-  /* get old comment */
   const { data: old } = await db
   .from("leave_requests")
   .select("admin_comment")
@@ -1095,15 +1283,30 @@ async function adminCancel(id){
   const newComment = commentBox.value || "";
 
   if(newComment){
-  finalComment += (finalComment ? " | " : "") + newComment;
+    finalComment += (finalComment ? " | " : "") + newComment;
   }
 
-  const { error } = await db.from("leave_requests")
+  const { error } = await db
+  .from("leave_requests")
   .update({
-  status:"cancelled",
-  admin_comment:finalComment
+    status:"cancelled",
+    admin_comment:finalComment
   })
   .eq("id",id);
+
+  try{
+    await logLeaveToSheet({
+      leave_id: leave.id,
+      name: emp.name,
+      phone: emp.phone,
+      days: leave.days,
+      from_date: leave.start_date,
+      to_date: leave.end_date,
+      status: "cancelled"
+    });
+  }catch(e){
+    showToast("Sheet log failed","error");
+  }
 
   if(error){
     hideLoader();
@@ -2282,45 +2485,50 @@ if(el) el.classList.add("active");
 const title = document.getElementById("pageTitle");
 
 if(page==="dashboard"){
-title.innerText="Dashboard";
-loadAdminDashboard();
-loadUpcomingHolidays();
-loadTeamCalendar();
+  title.innerText="Dashboard";
+  loadAdminDashboard();
+  loadUpcomingHolidays();
+  loadTeamCalendar();
 }
 
 if(page==="requests"){
-title.innerText="Leave Requests";
-renderRequestsPage();
+  title.innerText="Leave Requests";
+  renderRequestsPage();
 }
 
 if(page==="holidays"){
-title.innerText="Holiday Schedule";
-renderHolidayPage();
+  title.innerText="Holiday Schedule";
+  renderHolidayPage();
 }
 
 if(page==="manual"){
-title.innerText="Mark Leave";
-renderManualLeavePage();
+  title.innerText="Mark Leave";
+  renderManualLeavePage();
 }
 
 if(page==="reports"){
-title.innerText="Reports";
-renderReportsPage();
+  title.innerText="Reports";
+  renderReportsPage();
 }
 
 if(page==="employees"){
-title.innerText="Employees";
-renderEmployeesPage();
+  title.innerText="Employees";
+  renderEmployeesPage();
 }
 
 if(page==="payroll"){
-title.innerText="Payroll";
-renderPayrollPage();
+  title.innerText="Payroll";
+  renderPayrollPage();
 }
 
 if(page==="payrollSettings"){
-title.innerText="Payroll Settings";
-renderPayrollSettingsPage();
+  title.innerText="Payroll Settings";
+  renderPayrollSettingsPage();
+}
+
+if(page === "reimbursements"){
+  title.innerText="Reimbursements";
+  renderReimbursementsPage();
 }
 
 }

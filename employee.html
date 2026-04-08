@@ -4,6 +4,7 @@
   <link rel="stylesheet" href="base.css">
   <link rel="stylesheet" href="employee.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -13,170 +14,471 @@
 
 
 <body>
-<div class="dashboard">
-<header class="topbar">
-<div class="welcome-box">
-<h2>Employee Dashboard</h2>
-<p id="welcomeUser"></p>
-</div>
-
-<button class="logout-btn" onclick="logout()">Logout</button>
-</header>
-
-<div class="content">
-
-<h3>My Payslips</h3>
-
-<table>
-
-<thead>
-<tr>
-<th>Period Start</th>
-<th>Period End</th>
-<th>Final Salary</th>
-<th>Payslip</th>
-</tr>
-</thead>
-
-<tbody id="payslipTable"></tbody>
-
-</table> 
-
-
-<h3>Leave Balance</h3>
-<div id="balanceCards" class="balance-grid"></div>
-
-<div class="card">
-
-<h3>Apply Leave</h3>
-
-<div class="form-grid">
-
-<div>
-<label><h5>Leave Type</h5></label>
-<select id="leaveType"></select>
-</div>
-
-<div>
-<label><h5>PTO Type</h5></label>
-<div class="radio-group">
-
-<label>
-<input type="radio" name="ptoType" value="true" checked>
-Paid
-</label>
-
-<label>
-<input type="radio" name="ptoType" value="false">
-Unpaid
-</label>
-
-</div>
-</div>
-
-<div>
-<label><h5>Start Date</h5></label>
-<div class="date-field">
-<input type="text" id="startDate" placeholder="Start date" onchange="calculatePreview()">
-<span class="calendar-icon">📅</span>
-</div>
-</div>
-
-<div>
-<label><h5>End Date</h5></label>
-<div class="date-field">
-<input type="text" id="endDate" placeholder="End date" onchange="calculatePreview()">
-<span class="calendar-icon">📅</span>
-</div>
-</div>
-
-<div>
-<label>
-<input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
-Half Day
-</label>
-</div>
-
-<div id="halfSessionBox" style="display:none">
-
-<label>Session</label>
-
-<select id="halfDaySession">
-<option value="first_half">First Half</option>
-<option value="second_half">Second Half</option>
-</select>
-
-</div>
-</div>
-
-<div class="leave-preview">
-<div id="leaveDaysPreview"></div>
-<div id="holidayNotice" class="holiday-notice"></div>
-<div id="leaveConflict" class="leave-conflict"></div>
-</div>
-
-<button class="submit-btn" onclick="applyLeave()">
-Submit Request
-</button>
-
-</div>
-<br><br><br>
-<strong>Filters: </strong>
-<label>Status:</label> 
-  <select id="empStatusFilter" onchange="loadRequests()">
-    <option value="all">All</option>
-    <option value="pending">Pending</option>
-    <option value="approved">Approved</option>
-    <option value="rejected">Rejected</option>
-    <option value="cancelled">Cancelled</option>
-  </select>
-
-<label>From:</label> <input type="date" id="empFromDate" onchange="loadRequests()">
-
-<label>To:</label> <input type="date" id="empToDate" onchange="loadRequests()">
-
-<label>Leave Type:</label> 
-  <select id="empTypeFilter" onchange="loadRequests()">
-    <option value="all">All Types</option>
-  </select>
-
-<label>PTO:</label> <select id="empPtoFilter" onchange="loadRequests()">
-
-  <option value="all">All</option>
-  <option value="paid">Paid</option>
-  <option value="unpaid">Unpaid</option>
-</select> 
-  
-<div class="card">
-<h3>Your Leave History</h3>
-<table border="1" id="leaveTable">
-  <thead>
-    <tr>
-      <th>Type</th>
-      <th>Start</th>
-      <th>End</th>
-      <th>Days</th>
-      <th>Duration</th>
-      <th>Status</th>
-      <th>PTO</th>
-      <th>Comment</th>
-      <th>Action</th>
-    </tr>
-  </thead>
-  <tbody></tbody>
-</table>
-</div>
-
-</div>
-</div>
-</div>
-
+  <!-- <div class="dashboard"> -->
+  <div class="layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        Revaya <span>Employee</span>
+      </div>
+      <ul class="menu">
+        <li class="active" onclick="openEmployeePage('dashboard', this)">
+          <i class="fa-solid fa-chart-line"></i> Dashboard
+        </li>
+        <li onclick="openEmployeePage('leaves', this)">
+          <i class="fa-solid fa-calendar-check"></i> My Leaves
+        </li>
+        <li onclick="openEmployeePage('payslips', this)">
+          <i class="fa-solid fa-file-invoice"></i> Payslips
+        </li>
+        <li onclick="openEmployeePage('reimbursements', this)">
+          <i class="fa-solid fa-receipt"></i> Reimbursements
+        </li>
+        <li onclick="logout()">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </li>
+      </ul>
+    </aside>
+    <!-- Main Content -->
+    <div class="main">
+      <header class="topbar">
+        <div class="welcome-box">
+          <h2>Employee Dashboard</h2>
+          <p id="welcomeUser"></p>
+        </div>
+        <button class="logout-btn" onclick="logout()">Logout</button>
+      </header>
+      <div class="main-content"  id="pageContent">
+      </div>
+    </div>
+  </div>
 </body>
 
 <script>
 
 let holidays = [];
 let holidayDates = [];
+
+function renderReimbursementsPage(){
+
+  document.getElementById("pageContent").innerHTML = `
+
+    <div class="card">
+      <h3>Submit Expense</h3>
+
+      <div class="form-grid">
+
+        <div class="form-field">
+          <label>Amount</label>
+          <input type="number" id="expAmount" class="input-field" placeholder="Enter amount">
+        </div>
+
+        <div class="form-field">
+          <label>Category</label>
+          <input type="text" id="expCategory" class="input-field" placeholder="e.g. Travel">
+        </div>
+
+        <div class="form-field">
+          <label>Description</label>
+          <input type="text" id="expDesc" class="input-field" placeholder="Short description">
+        </div>
+
+        <div class="form-field">
+          <label>Receipt</label>
+          <div class="file-upload">
+            <label for="expReceipt" class="file-label">
+              <i class="fa-solid fa-upload"></i> Upload Receipt
+            </label>
+            <input type="file" id="expReceipt" hidden>
+            <span id="fileName" class="file-name">No file selected</span>
+          </div>
+        </div>
+
+      </div>
+
+      <button class="primary-btn" onclick="submitExpense()">
+        Submit Request
+      </button>
+    </div>
+
+    <div class="card">
+      <h3>My Requests</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Amount</th>
+            <th>Category</th>
+            <th>Status</th>
+            <th>Receipt</th>
+          </tr>
+        </thead>
+
+        <tbody id="expenseTable"></tbody>
+      </table>
+    </div>
+
+  `;
+
+  loadExpenses();
+}
+
+function renderPayslipsPage(){
+
+  document.getElementById("pageContent").innerHTML = `
+    <div class="card">
+      <h3>My Payslips</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Period Start</th>
+            <th>Period End</th>
+            <th>Final Salary</th>
+            <th>Payslip</th>
+          </tr>
+        </thead>
+        <tbody id="payslipTable"></tbody>
+      </table>
+    </div>
+  `;
+
+  loadPayslips();
+}
+
+function renderLeavesPage(){
+
+  document.getElementById("pageContent").innerHTML = `
+    <div id="balanceCards" class="balance-grid"></div>
+    <div class="card">
+      <h3>Apply Leave</h3>
+      <h3>Leave Balance</h3>
+        <div id="balanceCards" class="balance-grid"></div>
+        <div class="card">
+          <h3>Apply Leave</h3>
+          <div class="form-grid">
+            <div>
+              <label>
+                <h5>Leave Type</h5>
+              </label>
+              <select id="leaveType"></select>
+            </div>
+            <div>
+              <label>
+                <h5>PTO Type</h5>
+              </label>
+              <div class="radio-group">
+                <label>
+                  <input type="radio" name="ptoType" value="true" checked>
+                  Paid
+                </label>
+                <label>
+                  <input type="radio" name="ptoType" value="false">
+                  Unpaid
+                </label>
+              </div>
+            </div>
+            <div>
+              <label>
+                <h5>Start Date</h5>
+              </label>
+              <div class="date-field">
+                <input type="text" id="startDate" placeholder="Start date" onchange="calculatePreview()">
+                <span class="calendar-icon">📅</span>
+              </div>
+            </div>
+            <div>
+              <label>
+                <h5>End Date</h5>
+              </label>
+              <div class="date-field">
+                <input type="text" id="endDate" placeholder="End date" onchange="calculatePreview()">
+                <span class="calendar-icon">📅</span>
+              </div>
+            </div>
+            <div>
+              <label>
+                <input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
+                Half Day
+              </label>
+            </div>
+            <div id="halfSessionBox" style="display:none">
+              <label>Session</label>
+              <select id="halfDaySession">
+                <option value="first_half">First Half</option>
+                <option value="second_half">Second Half</option>
+              </select>
+            </div>
+          </div>
+          <div class="leave-preview">
+            <div id="leaveDaysPreview"></div>
+            <div id="holidayNotice" class="holiday-notice"></div>
+            <div id="leaveConflict" class="leave-conflict"></div>
+          </div>
+          <button class="submit-btn" onclick="applyLeave()">
+          Submit Request
+          </button>
+        </div>
+        <br><br><br>
+        <strong>Filters: </strong>
+        <label>Status:</label> 
+        <select id="empStatusFilter" onchange="loadRequests()">
+          <option value="all">All</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <label>From:</label> <input type="date" id="empFromDate" onchange="loadRequests()">
+        <label>To:</label> <input type="date" id="empToDate" onchange="loadRequests()">
+        <label>Leave Type:</label> 
+        <select id="empTypeFilter" onchange="loadRequests()">
+          <option value="all">All Types</option>
+        </select>
+        <label>PTO:</label>
+        <select id="empPtoFilter" onchange="loadRequests()">
+          <option value="all">All</option>
+          <option value="paid">Paid</option>
+          <option value="unpaid">Unpaid</option>
+        </select>   
+        <div class="card">
+          <h3>Your Leave History</h3>
+          <table border="1" id="leaveTable">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Start</th>
+                <th>End</th>
+                <th>Days</th>
+                <th>Duration</th>
+                <th>Status</th>
+                <th>PTO</th>
+                <th>Comment</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+    </div>
+    <div class="card">
+      <h3>Your Leave History</h3>
+      <table id="leaveTable">
+        <thead>...</thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  `;
+
+  loadLeaveBalance();
+  loadLeaveTypes();
+  loadRequests();
+}
+
+function renderDashboard(){
+
+  document.getElementById("pageContent").innerHTML = `
+    <div id="balanceCards" class="balance-grid"></div>
+  `;
+
+  loadLeaveBalance();
+}
+
+function openEmployeePage(page, el){
+
+  // active state
+  document.querySelectorAll(".menu li").forEach(li=>{
+    li.classList.remove("active");
+  });
+
+  if(el) el.classList.add("active");
+
+  const container = document.getElementById("pageContent");
+
+  // ROUTING
+  if(page === "dashboard"){
+    renderDashboard();
+  }
+
+  if(page === "leaves"){
+    renderLeavesPage();
+  }
+
+  if(page === "payslips"){
+    renderPayslipsPage();
+  }
+
+  if(page === "reimbursements"){
+    renderReimbursementsPage();
+  }
+}
+
+
+
+async function submitExpense(){
+
+  showLoader("Submitting expense...");
+
+  const { data: sessionData } = await db.auth.getSession();
+
+  if (!sessionData.session) {
+    hideLoader();
+    showToast("Session expired, login again","error");
+    return;
+  }
+
+  const userId = sessionData.session.user.id;
+
+  const amount = document.getElementById("expAmount").value;
+  const category = document.getElementById("expCategory").value;
+  const desc = document.getElementById("expDesc").value;
+
+  const file = document.getElementById("expReceipt").files[0];
+
+  let receiptUrl = null;
+
+  // 🔥 upload file
+  if(file){
+     // 🔴 size check (1MB)
+    if(file.size > 1024 * 1024){
+      hideLoader();
+      showToast("File must be less than 1MB","error");
+      return;
+    }
+
+    // only images/pdf allow
+    const allowedTypes = ["image/jpeg","image/png","application/pdf"];
+
+    if(!allowedTypes.includes(file.type)){
+      hideLoader();
+      showToast("Only JPG, PNG or PDF allowed","error");
+      return;
+    }
+
+    const path = `${userId}/${Date.now()}_${file.name}`;
+
+    const { error } = await db.storage
+    .from("receipts")
+    .upload(path,file);
+
+    if(error){
+      hideLoader();
+      showToast(error.message,"error");
+      return;
+    }
+
+    const { data } = db.storage
+    .from("receipts")
+    .getPublicUrl(path);
+
+    receiptUrl = data.publicUrl;
+  }
+
+  // 🔥 insert DB
+  const { error } = await db.from("reimbursements").insert({
+
+    employee_id: userId,
+    amount: amount,
+    category: category,
+    description: desc,
+    receipt_url: receiptUrl,
+    status: "pending"
+
+  });
+
+  if(error){
+    hideLoader();
+    showToast(error.message,"error");
+    return;
+  }
+
+  hideLoader();
+  showToast("Expense submitted","success");
+
+  loadExpenses();
+}
+
+async function loadExpenses(){
+
+  const { data:userData } = await db.auth.getUser();
+
+  const { data } = await db
+  .from("reimbursements")
+  .select("*")
+  .eq("employee_id",userData.user.id)
+  .order("created_at",{ascending:false});
+
+  let rows = "";
+
+  data.forEach(e=>{
+
+    rows += `
+      <tr>
+        <td>${e.amount}</td>
+        <td>${e.category}</td>
+
+        <td>
+          <span class="badge ${
+            e.status === "approved" ? "badge-good" :
+            e.status === "pending" ? "badge-pending" :
+            "badge-bad"
+          }">
+            ${e.status}
+          </span>
+        </td>
+        <td>
+          ${e.receipt_url ? `
+            <div style="display:flex; gap:8px; align-items:center;">
+              ${
+                e.receipt_url.includes(".pdf") 
+                ? `<span onclick="viewReceipt('${e.receipt_url}')" style="cursor:pointer">PDF</span>`
+                : `<img src="${e.receipt_url}" class="receipt-thumb" onclick="viewReceipt('${e.receipt_url}')">`
+              }
+            </div>
+          ` : "-"}
+        </td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("expenseTable").innerHTML = rows;
+}
+
+function viewReceipt(url){
+
+  const modal = document.createElement("div");
+
+  modal.style.position = "fixed";
+  modal.style.top = "0";
+  modal.style.left = "0";
+  modal.style.width = "100%";
+  modal.style.height = "100%";
+  modal.style.background = "rgba(0,0,0,0.7)";
+  modal.style.display = "flex";
+  modal.style.alignItems = "center";
+  modal.style.justifyContent = "center";
+  modal.style.zIndex = "9999";
+
+  modal.innerHTML = `
+    <div style="background:white;padding:20px;border-radius:10px">
+
+      ${
+        url.includes(".pdf")
+        ? `<iframe src="${url}" style="width:70vw;height:70vh"></iframe>`
+        : `<img src="${url}" style="max-width:80vw;max-height:80vh">`
+      }
+
+      <br><br>
+
+      <button onclick="this.closest('div').parentElement.remove()">
+        Close
+      </button>
+
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
 
 async function loadUserName(){
 
@@ -209,9 +511,8 @@ emp = { name: meta.name || "Employee" }
 
 }
 
-document.getElementById("welcomeUser").innerText =
-"Welcome back, " + emp.name
-
+document.getElementById("welcomeUser").innerHTML = 
+"<h2><strong>Welcome 👋</strong>" + emp.name + "</h2>"
 }
 
 loadUserName();
@@ -872,7 +1173,24 @@ loadEmployeeTypeFilter();
 
 }
 
-initPage();
+document.addEventListener("change", function(e){
+
+    if(e.target.type === "file"){
+      const file = e.target.files[0];
+
+      const container = e.target.closest(".file-upload");
+      if(!container) return;
+
+      const nameEl = container.querySelector(".file-name");
+
+      if(nameEl){
+        nameEl.innerText = file ? file.name : "No file selected";
+      }
+    }
+
+  });
+
+openEmployeePage("dashboard");
 </script>
 
 <div id="toastContainer"></div>
