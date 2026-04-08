@@ -66,36 +66,44 @@ function renderReimbursementsPage(){
     <div class="card">
       <h3>Submit Expense</h3>
 
-      <div class="form-grid">
-
+      <div class="form-row">
         <div class="form-field">
           <label>Amount</label>
           <input type="number" id="expAmount" class="input-field" placeholder="Enter amount">
         </div>
-
         <div class="form-field">
           <label>Category</label>
-          <input type="text" id="expCategory" class="input-field" placeholder="e.g. Travel">
+          <div class="select-wrapper">
+            <select id="expCategory" class="input-field select-field" required>
+              <option value="" disabled selected hidden>
+                Select Category
+              </option>
+              <option value="medical">Medical</option>
+              <option value="medical">Internet</option>
+              <option value="medical">Subscription</option>
+              <option value="travel">Travel</option>
+              <option value="food">Food</option>
+              <option value="fuel">Fuel</option>
+              <option value="office">Office Expense</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
         </div>
-
         <div class="form-field">
           <label>Description</label>
           <input type="text" id="expDesc" class="input-field" placeholder="Short description">
         </div>
-
         <div class="form-field">
           <label>Receipt</label>
           <div class="file-upload">
             <label for="expReceipt" class="file-label">
               <i class="fa-solid fa-upload"></i> Upload Receipt
+              <span id="fileName" class="file-name">No file selected</span>
             </label>
             <input type="file" id="expReceipt" hidden>
-            <span id="fileName" class="file-name">No file selected</span>
           </div>
         </div>
-
       </div>
-
       <button class="primary-btn" onclick="submitExpense()">
         Submit Request
       </button>
@@ -317,8 +325,6 @@ function openEmployeePage(page, el){
 
 async function submitExpense(){
 
-  showLoader("Submitting expense...");
-
   const { data: sessionData } = await db.auth.getSession();
 
   if (!sessionData.session) {
@@ -336,6 +342,23 @@ async function submitExpense(){
   const file = document.getElementById("expReceipt").files[0];
 
   let receiptUrl = null;
+  
+  if(!amount){
+    showToast("Enter amount","error");
+    return;
+  }
+
+  if(!category){
+    showToast("Select category","error");
+    return;
+  }
+
+  if(!desc){
+    showToast("Enter description","error");
+    return;
+  }
+
+  showLoader("Submitting expense...");
 
   // 🔥 upload file
   if(file){
