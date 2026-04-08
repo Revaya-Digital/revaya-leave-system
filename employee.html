@@ -160,127 +160,120 @@ function renderLeavesPage(){
     <div id="balanceCards" class="balance-grid"></div>
     <div class="card">
       <h3>Apply Leave</h3>
-      <h3>Leave Balance</h3>
-        <div id="balanceCards" class="balance-grid"></div>
-        <div class="card">
-          <h3>Apply Leave</h3>
-          <div class="form-grid">
-            <div>
-              <label>
-                <h5>Leave Type</h5>
-              </label>
-              <select id="leaveType"></select>
-            </div>
-            <div>
-              <label>
-                <h5>PTO Type</h5>
-              </label>
-              <div class="radio-group">
-                <label>
-                  <input type="radio" name="ptoType" value="true" checked>
-                  Paid
-                </label>
-                <label>
-                  <input type="radio" name="ptoType" value="false">
-                  Unpaid
-                </label>
-              </div>
-            </div>
-            <div>
-              <label>
-                <h5>Start Date</h5>
-              </label>
-              <div class="date-field">
-                <input type="text" id="startDate" placeholder="Start date" onchange="calculatePreview()">
-                <span class="calendar-icon">📅</span>
-              </div>
-            </div>
-            <div>
-              <label>
-                <h5>End Date</h5>
-              </label>
-              <div class="date-field">
-                <input type="text" id="endDate" placeholder="End date" onchange="calculatePreview()">
-                <span class="calendar-icon">📅</span>
-              </div>
-            </div>
-            <div>
-              <label>
-                <input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
-                Half Day
-              </label>
-            </div>
-            <div id="halfSessionBox" style="display:none">
-              <label>Session</label>
-              <select id="halfDaySession">
-                <option value="first_half">First Half</option>
-                <option value="second_half">Second Half</option>
-              </select>
-            </div>
-          </div>
-          <div class="leave-preview">
-            <div id="leaveDaysPreview"></div>
-            <div id="holidayNotice" class="holiday-notice"></div>
-            <div id="leaveConflict" class="leave-conflict"></div>
-          </div>
-          <button class="submit-btn" onclick="applyLeave()">
-          Submit Request
-          </button>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Leave Type</label>
+          <select id="leaveType" class="input-field"></select>
         </div>
-        <br><br><br>
-        <strong>Filters: </strong>
-        <label>Status:</label> 
-        <select id="empStatusFilter" onchange="loadRequests()">
-          <option value="all">All</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
-        <label>From:</label> <input type="date" id="empFromDate" onchange="loadRequests()">
-        <label>To:</label> <input type="date" id="empToDate" onchange="loadRequests()">
-        <label>Leave Type:</label> 
-        <select id="empTypeFilter" onchange="loadRequests()">
-          <option value="all">All Types</option>
-        </select>
-        <label>PTO:</label>
-        <select id="empPtoFilter" onchange="loadRequests()">
-          <option value="all">All</option>
-          <option value="paid">Paid</option>
-          <option value="unpaid">Unpaid</option>
-        </select>   
-        <div class="card">
-          <h3>Your Leave History</h3>
-          <table border="1" id="leaveTable">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Start</th>
-                <th>End</th>
-                <th>Days</th>
-                <th>Duration</th>
-                <th>Status</th>
-                <th>PTO</th>
-                <th>Comment</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
+        <div class="form-field">
+          <label>PTO Type</label>
+          <div class="radio-group">
+                <label><input type="radio" name="ptoType" value="true" checked>Paid</label>
+                <label><input type="radio" name="ptoType" value="false">Unpaid</label>
+          </div>
         </div>
+        <div class="form-field">
+          <label>
+            <input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
+            Half Day
+          </label>
+        </div>
+        <div class="form-field" id="halfSessionBox" style="display:none">
+          <label>Session</label>
+          <select id="halfDaySession">
+            <option value="first_half">First Half</option>
+            <option value="second_half">Second Half</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Start Date</label>
+          <div class="date-field">
+            <input type="text" id="startDate" placeholder="Start date" onchange="calculatePreview()">
+            <span class="calendar-icon">📅</span>
+          </div>
+        </div>
+        <div class="form-field"
+          <label>End Date</label>
+          <div class="date-field">
+            <input type="text" id="endDate" placeholder="End date" onchange="calculatePreview()">
+            <span class="calendar-icon">📅</span>
+          </div>
+        </div>
+      </div>
+      <div class="leave-preview">
+        <div id="leaveDaysPreview"></div>
+        <div id="holidayNotice" class="holiday-notice"></div>
+        <div id="leaveConflict" class="leave-conflict"></div>
+      </div>
+      <button class="submit-btn" onclick="applyLeave()">
+      Submit Request
+      </button>
+    </div>
+    <div class="card">
+      <strong>Filters: </strong>
+      <div class="form-row">
+        <div class="form-field">
+          <label>Status:</label> 
+          <select id="empStatusFilter" onchange="loadRequests()">
+            <option value="all">All</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>From:</label>
+          <input type="date" id="empFromDate" onchange="loadRequests()">
+        </div>
+        <div class="form-field">
+          <label>To:</label> 
+          <input type="date" id="empToDate" onchange="loadRequests()">
+        </div>
+        <div class="form-field">
+          <label>Leave Type:</label> 
+          <select id="empTypeFilter" onchange="loadRequests()">
+            <option value="all">All Types</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>PTO:</label>
+          <select id="empPtoFilter" onchange="loadRequests()">
+            <option value="all">All</option>
+            <option value="paid">Paid</option>
+            <option value="unpaid">Unpaid</option>
+          </select>
+        </div>
+      </div>
     </div>
     <div class="card">
       <h3>Your Leave History</h3>
-      <table id="leaveTable">
-        <thead>...</thead>
-        <tbody></tbody>
-      </table>
+      <div class="table-wrapper">
+        <table border="1" id="leaveTable">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Start</th>
+              <th>End</th>
+              <th>Days</th>
+              <th>Duration</th>
+              <th>Status</th>
+              <th>PTO</th>
+              <th>Comment</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   `;
 
   loadLeaveBalance();
   loadLeaveTypes();
   loadRequests();
+  loadHolidays();
+  initCalendar();
 }
 
 function renderDashboard(){
@@ -320,8 +313,6 @@ function openEmployeePage(page, el){
     renderReimbursementsPage();
   }
 }
-
-
 
 async function submitExpense(){
 
