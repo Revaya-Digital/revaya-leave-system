@@ -31,32 +31,68 @@ Revaya <span>Admin</span>
 <i class="fa-solid fa-chart-line"></i> Dashboard
 </li>
 
-<li data-page="payroll" onclick="openPage('payroll',this)">
-<i class="fa-solid fa-money-bill"></i> Payroll
+<li data-page="access" onclick="openPage('access',this)">
+<i class="fa-solid fa-user-shield"></i> Access Control
 </li>
 
-<li data-page="payrollSettings" onclick="openPage('payrollSettings',this)">
-<i class="fa-solid fa-gear"></i> Payroll Settings
+<li class="menu-group">
+  <div class="menu-parent" onclick="toggleMenu(this)">
+    <div>
+      <i class="fa-solid fa-building-user"></i> HR
+    </div>
+    <i class="fa-solid fa-chevron-down menu-arrow"></i>
+  </div>
+  <ul class="submenu">
+    <li data-page="employees" onclick="openPage('employees',this)">
+      <i class="fa-solid fa-users"></i> Employees
+    </li>
+    <li data-page="holidays" onclick="openPage('holidays',this)">
+      <i class="fa-solid fa-calendar-days"></i> Holidays
+    </li>
+    <li data-page="requests" onclick="openPage('requests',this)">
+      <i class="fa-solid fa-envelope-open-text"></i> Leave Requests
+    </li>
+    <li data-page="manual" onclick="openPage('manual',this)">
+      <i class="fa-solid fa-user-check"></i> Mark Leave
+    </li>
+    <li data-page="reimbursements" onclick="openPage('reimbursements',this)">
+      <i class="fa-solid fa-receipt"></i> Reimbursements
+    </li>
+  </ul>
 </li>
 
-<li data-page="holidays" onclick="openPage('holidays',this)">
-<i class="fa-solid fa-calendar-days"></i> Holidays
+<li class="menu-group">
+  <div class="menu-parent" onclick="toggleMenu(this)">
+    <div>
+      <i class="fa-solid fa-money-bill"></i> Payroll
+    </div>
+    <i class="fa-solid fa-chevron-down menu-arrow"></i>
+  </div>
+  <ul class="submenu">
+    <li data-page="payroll" onclick="openPage('payroll',this)">
+      <i class="fa-solid fa-file-invoice-dollar"></i> Payroll Generation
+    </li>
+    <li data-page="tasks" onclick="openPage('payrollSettings',this)">
+      <i class="fa-solid fa-gear"></i> Payroll Configuration
+    </li>
+  </ul>
 </li>
 
-<li data-page="employees" onclick="openPage('employees',this)">
-<i class="fa-solid fa-users"></i> Employees
-</li>
-
-<li data-page="requests" onclick="openPage('requests',this)">
-<i class="fa-solid fa-envelope-open-text"></i> Leave Requests
-</li>
-
-<li data-page="reimbursements" onclick="openPage('reimbursements', this)">
-  <i class="fa-solid fa-receipt"></i> Reimbursements
-</li>
-
-<li data-page="manual" onclick="openPage('manual',this)">
-<i class="fa-solid fa-user-check"></i> Mark Leave
+<li class="menu-group">
+  <div class="menu-parent" onclick="toggleMenu(this)">
+    <div>
+      <i class="fa-solid fa-folder"></i> Projects
+    </div>
+    <i class="fa-solid fa-chevron-down menu-arrow"></i>
+  </div>
+  <ul class="submenu">
+    <li data-page="projects" onclick="openPage('projects',this)">
+      <i class="fa-solid fa-diagram-project"></i> Project Details
+    </li>
+    <li data-page="tasks" onclick="openPage('tasks',this)">
+      <i class="fa-solid fa-list-check"></i> Tasks
+    </li>
+  </ul>
 </li>
 
 <li data-page="reports" onclick="openPage('reports',this)">
@@ -245,9 +281,20 @@ let editingHolidayId = null;
 let currentEmployeeId=null
 
 
+async function getEmployeeId() {
+  const { data: user } = await db.auth.getUser();
+  const { data } = await db
+    .from("employees")
+    .select("id")
+    .eq("auth_user_id", user.user.id)
+    .single();
+  return data.id;
+}
+
 async function checkAdminAuth(){
 
 const { data:userData } = await db.auth.getUser()
+const empId = await getEmployeeId();
 
 if(!userData.user){
 window.location="index.html"
@@ -256,11 +303,11 @@ return
 
 const { data: emp } = await db
 .from("employees")
-.select("role")
-.eq("auth_user_id",userData.user.id)
+.select("role_id, roles!employees_role_id_fkey(name)")
+.eq("id",empId)
 .single()
 
-if(!emp || emp.role !== "admin"){
+if(!emp || emp.roles?.name !== "admin"){
 window.location="employee.html"
 }
 
@@ -271,6 +318,11 @@ function toggleSidebar(){
 document.querySelector(".sidebar")
 .classList.toggle("open");
 
+}
+
+function toggleMenu(el){
+  const group = el.closest(".menu-group");
+  group.classList.toggle("open");
 }
 
 function renderReimbursementsPage(){
@@ -330,7 +382,7 @@ async function loadAllExpenses(){
     const { data: emp } = await db
     .from("employees")
     .select("name")
-    .eq("auth_user_id", e.employee_id)
+    .eq("id", e.employee_id)
     .single();
 
     if(emp) empName = emp.name;
@@ -626,13 +678,13 @@ async function renderManualLeavePage(){
 
 const { data: employees } = await db
 .from("employees")
-.select("auth_user_id,name")
+.select("id,name")
 .order("name");
 
 let options="";
 
 employees.forEach(e=>{
-options += `<option value="${e.auth_user_id}">${e.name}</option>`;
+options += `<option value="${e.id}">${e.name}</option>`;
 });
 
 document.getElementById("pageContent").innerHTML = `
@@ -744,7 +796,9 @@ async function adminApplyLeave(){
 
   hideLoader();
   showToast("Leave approved & email sent","success");
-  renderRequestsPage();
+  //renderRequestsPage();
+  const element = document.getElementById('requestsTab');
+  openPage('requests', element);
 }
 
 async function loadRequests(){
@@ -798,14 +852,14 @@ const { data: approvedLeaves } = await db
 
 const { data: employees } = await db
 .from("employees")
-.select("auth_user_id,name");
+.select("id,name");
 
 const { data: types } = await db
 .from("leave_types")
 .select("id,name,yearly_quota");
 
 const empMap = {};
-employees.forEach(e => empMap[e.auth_user_id] = e.name);
+employees.forEach(e => empMap[e.id] = e.name);
 
 const typeMap = {};
 types.forEach(t => typeMap[t.id] = t.name);
@@ -991,7 +1045,7 @@ async function approve(id){
   const { data: emp } = await db
   .from("employees")
   .select("email,name,phone")
-  .eq("auth_user_id",leave.employee_id)
+  .eq("id",leave.employee_id)
   .single();
 
   const commentBox = document.getElementById("c_"+id);
@@ -1079,7 +1133,7 @@ async function reject(id){
   const { data: emp } = await db
   .from("employees")
   .select("email,name,phone")
-  .eq("auth_user_id",leave.employee_id)
+  .eq("id",leave.employee_id)
   .single();
 
   const commentBox = document.getElementById("c_"+id);
@@ -1144,6 +1198,734 @@ async function reject(id){
   hideLoader();
   showToast("Leave Rejected","success");
   loadRequests();
+}
+
+async function renderProjectsPage(){
+
+  const { data: projects } = await db
+  .from("projects")
+  .select(`
+    *,
+    employees!projects_created_by_fkey(name)
+  `)
+  .order("created_at",{ascending:false});
+
+  let rows = "";
+
+  projects.forEach(p=>{
+
+    rows += `
+      <tr>
+        <td>${p.name}</td>
+        <td>${p.description || "-"}</td>
+        <td>
+          <span class="badge ${
+            p.status === "active"
+            ? "badge-good"
+            : "badge-bad"
+          }">
+            ${p.status}
+          </span>
+        </td>
+        <td>${p.employees?.name || "-"}</td>
+      </tr>
+    `;
+
+  });
+
+  document.getElementById("pageContent").innerHTML = `
+
+    <div class="card">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+
+        <h3>Projects</h3>
+
+        <button onclick="openProjectModal()">
+          Create Project
+        </button>
+
+      </div>
+
+      <div class="table-wrapper">
+
+        <table>
+
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Created By</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${rows}
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+async function renderTasksPage(){
+
+  const { data: tasks, error } = await db
+  .from("tasks")
+  .select(`
+    *,
+    projects!tasks_project_id_fkey(name),
+    assignee:employees!tasks_assigned_to_fkey(name),
+    assigner:employees!tasks_assigned_by_fkey(name)
+  `)
+  .order("created_at",{ascending:false});
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  let rows = "";
+
+  tasks.forEach(t=>{
+
+    rows += `
+      <tr>
+
+        <td>${t.title}</td>
+
+        <td>
+          ${t.projects?.name || "-"}
+        </td>
+
+        <td>
+          ${t.assignee?.name || "-"}
+        </td>
+
+        <td>
+          ${t.assigner?.name || "-"}
+        </td>
+
+        <td>
+          <span class="badge ${
+            t.status === "closed"
+            ? "badge-good"
+            : t.status === "in_progress"
+            ? "badge-pending"
+            : "badge-bad"
+          }">
+            ${t.status}
+          </span>
+        </td>
+
+        <td>
+          ${t.allotted_hours || 0} hrs
+        </td>
+
+        <td>
+          ${t.deadline || "-"}
+        </td>
+
+        <td>
+          <button onclick="openEditTaskModal('${t.id}')">
+            Edit
+          </button>
+        </td>
+
+      </tr>
+    `;
+
+  });
+
+  document.getElementById("pageContent").innerHTML = `
+
+    <div class="card">
+
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:20px;
+      ">
+
+        <h3>Tasks</h3>
+
+        <button onclick="openTaskModal()">
+          Create Task
+        </button>
+
+      </div>
+
+      <div class="table-wrapper">
+
+        <table>
+
+          <thead>
+
+            <tr>
+              <th>Task</th>
+              <th>Project</th>
+              <th>Assigned To</th>
+              <th>Assigned By</th>
+              <th>Status</th>
+              <th>Allocated Hours</th>
+              <th>Deadline</th>
+              <th>Action</th>
+            </tr>
+
+          </thead>
+
+          <tbody>
+            ${rows}
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  `;
+}
+
+function openProjectModal(){
+
+  const modal = document.createElement("div");
+
+  modal.className = "modal";
+
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+
+    <div class="modal-content">
+
+      <h3>Create Project</h3>
+
+      <div class="form-grid">
+
+        <div class="form-field">
+          <label>Project Name</label>
+          <input class="input-field" id="projectName">
+        </div>
+
+        <div class="form-field">
+          <label>Status</label>
+
+          <div class="select-wrapper">
+            <select class="input-field select-field" id="projectStatus">
+              <option value="active">Active</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="form-field" style="margin-top:15px">
+        <label>Description</label>
+        <textarea 
+          id="projectDesc"
+          class="input-field"
+          style="width:100%;max-width:100%;min-height:100px"
+        ></textarea>
+      </div>
+
+      <div class="modal-actions">
+
+        <button onclick="createProject(this)">
+          Save Project
+        </button>
+
+        <button 
+          class="secondary-btn"
+          onclick="this.closest('.modal').remove()"
+        >
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+  document.body.appendChild(modal);
+}
+
+async function openTaskModal(){
+
+  const { data: projects } = await db
+  .from("projects")
+  .select("id,name")
+  .eq("status","active")
+  .order("name");
+
+  const { data: employees } = await db
+  .from("employees")
+  .select("id,name")
+  .order("name");
+
+  let projectOptions = "";
+  let employeeOptions = "";
+
+  projects.forEach(p=>{
+    projectOptions += `
+      <option value="${p.id}">
+        ${p.name}
+      </option>
+    `;
+  });
+
+  employees.forEach(e=>{
+    employeeOptions += `
+      <option value="${e.id}">
+        ${e.name}
+      </option>
+    `;
+  });
+
+  const modal = document.createElement("div");
+
+  modal.className = "modal";
+
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+
+    <div class="modal-content">
+
+      <h3>Create Task</h3>
+
+      <div class="form-grid">
+
+        <div class="form-field">
+
+          <label>Project</label>
+
+          <div class="select-wrapper">
+            <select class="input-field select-field" id="taskProject">
+              ${projectOptions}
+            </select>
+          </div>
+
+        </div>
+
+        <div class="form-field">
+
+          <label>Assign Employee</label>
+
+          <div class="select-wrapper">
+            <select class="input-field select-field" id="taskEmployee">
+              ${employeeOptions}
+            </select>
+          </div>
+
+        </div>
+
+        <div class="form-field">
+          <label>Task Title</label>
+          <input class="input-field" id="taskTitle">
+        </div>
+
+        <div class="form-field">
+          <label>Allocated Hours</label>
+          <input type="number" min="1" class="input-field" id="taskHours" placeholder="Hours">
+        </div>
+
+        <div class="form-field">
+          <label>Deadline</label>
+          <div class="date-field">
+            <input type="text" class="date-input" id="taskDeadline">
+            <span class="calendar-icon">📅</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="form-field" style="margin-top:15px">
+
+        <label>Description</label>
+
+        <textarea
+          id="taskDesc"
+          class="input-field"
+          style="width:100%;max-width:100%;min-height:100px"
+        ></textarea>
+
+      </div>
+
+      <div class="modal-actions">
+
+        <button onclick="createTask(this)">
+          Create Task
+        </button>
+
+        <button
+          class="secondary-btn"
+          onclick="this.closest('.modal').remove()"
+        >
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+  document.body.appendChild(modal);
+
+  initAllDatePickers();
+}
+
+async function createProject(btn){
+
+  const name = document.getElementById("projectName").value;
+  const description = document.getElementById("projectDesc").value;
+  const status = document.getElementById("projectStatus").value;
+
+  if(!name){
+    showToast("Enter project name","error");
+    return;
+  }
+
+  const empId = await getEmployeeId();
+
+  btn.disabled = true;
+
+  const { error } = await db
+  .from("projects")
+  .insert({
+    name:name,
+    description:description,
+    status:status,
+    created_by:empId
+  });
+
+  btn.disabled = false;
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  btn.closest(".modal").remove();
+  showToast("Project created","success");
+  renderProjectsPage();
+}
+
+async function createTask(btn){
+
+  const projectId = document.getElementById("taskProject").value;
+  const employeeId = document.getElementById("taskEmployee").value;
+  const title = document.getElementById("taskTitle").value;
+  const description = document.getElementById("taskDesc").value;
+  const deadline = document.getElementById("taskDeadline").value;
+  const hours = document.getElementById("taskHours").value;
+
+  if(!projectId){
+    showToast("Select project","error");
+    return;
+  }
+
+  if(!employeeId){
+    showToast("Select employee","error");
+    return;
+  }
+
+  if(!title){
+    showToast("Enter task title","error");
+    return;
+  }
+
+  if(!hours || Number(hours) <= 0){
+  showToast("Enter allocated hours","error");
+  return;
+  }
+
+  const empId = await getEmployeeId();
+
+  btn.disabled = true;
+
+  const { error } = await db
+  .from("tasks")
+  .insert({
+    project_id: projectId,
+    title: title,
+    description: description,
+    assigned_to: employeeId,
+    assigned_by: empId,
+    deadline: deadline,
+    status: "pending",
+    alloted_hours: Number(hours)
+  });
+
+  btn.disabled = false;
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  btn.closest(".modal").remove();
+  showToast("Task created","success");
+  renderTasksPage();
+}
+
+async function openEditTaskModal(taskId){
+
+  const { data: task, error } = await db
+  .from("tasks")
+  .select("*")
+  .eq("id",taskId)
+  .single();
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  const { data: projects } = await db
+  .from("projects")
+  .select("id,name")
+  .eq("status","active");
+
+  const { data: employees } = await db
+  .from("employees")
+  .select("id,name");
+
+  let projectOptions = "";
+  let employeeOptions = "";
+
+  projects.forEach(p=>{
+
+    projectOptions += `
+      <option 
+        value="${p.id}"
+        ${task.project_id === p.id ? "selected" : ""}
+      >
+        ${p.name}
+      </option>
+    `;
+
+  });
+
+  employees.forEach(e=>{
+
+    employeeOptions += `
+      <option 
+        value="${e.id}"
+        ${task.assigned_to === e.id ? "selected" : ""}
+      >
+        ${e.name}
+      </option>
+    `;
+
+  });
+
+  const modal = document.createElement("div");
+
+  modal.className = "modal";
+
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+
+    <div class="modal-content">
+
+      <h3>Edit Task</h3>
+
+      <div class="form-grid">
+
+        <div class="form-field">
+
+          <label>Project</label>
+
+          <div class="select-wrapper">
+            <select id="editTaskProject"
+              class="input-field select-field">
+              ${projectOptions}
+            </select>
+          </div>
+
+        </div>
+
+        <div class="form-field">
+
+          <label>Assign Employee</label>
+
+          <div class="select-wrapper">
+            <select id="editTaskEmployee"
+              class="input-field select-field">
+              ${employeeOptions}
+            </select>
+          </div>
+
+        </div>
+
+        <div class="form-field">
+          <label>Task Title</label>
+
+          <input
+            id="editTaskTitle"
+            class="input-field"
+            value="${task.title || ""}"
+          >
+        </div>
+
+        <div class="form-field">
+          <label>Allocated Hours</label>
+
+          <input
+            type="number"
+            id="editTaskHours"
+            class="input-field"
+            value="${task.alloted_hours || 0}"
+          >
+        </div>
+
+        <div class="form-field">
+          <label>Deadline</label>
+
+          <input
+            type="date"
+            id="editTaskDeadline"
+            class="input-field"
+            value="${task.deadline || ""}"
+          >
+        </div>
+
+        <div class="form-field">
+
+          <label>Status</label>
+
+          <div class="select-wrapper">
+
+            <select
+              id="editTaskStatus"
+              class="input-field select-field"
+            >
+
+              <option value="pending"
+                ${task.status==="pending"?"selected":""}>
+                Pending
+              </option>
+
+              <option value="in_progress"
+                ${task.status==="in_progress"?"selected":""}>
+                In Progress
+              </option>
+
+              <option value="review"
+                ${task.status==="review"?"selected":""}>
+                Review
+              </option>
+
+              <option value="submitted"
+                ${task.status==="submitted"?"selected":""}>
+                Submitted
+              </option>
+
+              <option value="closed"
+                ${task.status==="closed"?"selected":""}>
+                Closed
+              </option>
+
+            </select>
+
+          </div>
+
+        </div>
+
+      </div>
+
+      <div class="form-field" style="margin-top:15px">
+
+        <label>Description</label>
+
+        <textarea
+          id="editTaskDesc"
+          class="input-field"
+          style="width:100%;max-width:100%;min-height:100px"
+        >${task.description || ""}</textarea>
+
+      </div>
+
+      <div class="modal-actions">
+
+        <button onclick="updateTask('${task.id}',this)">
+          Update Task
+        </button>
+
+        <button
+          class="secondary-btn"
+          onclick="this.closest('.modal').remove()"
+        >
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+
+  `;
+
+  document.body.appendChild(modal);
+}
+
+async function updateTask(taskId,btn){
+
+  const payload = {
+
+    project_id:
+      document.getElementById("editTaskProject").value,
+
+    assigned_to:
+      document.getElementById("editTaskEmployee").value,
+
+    title:
+      document.getElementById("editTaskTitle").value,
+
+    description:
+      document.getElementById("editTaskDesc").value,
+
+    deadline:
+      document.getElementById("editTaskDeadline").value,
+
+    status:
+      document.getElementById("editTaskStatus").value,
+
+    alloted_hours:
+      Number(document.getElementById("editTaskHours").value)
+
+  };
+
+  btn.disabled = true;
+
+  const { error } = await db
+  .from("tasks")
+  .update(payload)
+  .eq("id",taskId);
+
+  btn.disabled = false;
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  btn.closest(".modal").remove();
+
+  showToast("Task updated","success");
+
+  renderTasksPage();
 }
 
 async function renderReportsPage(){
@@ -1268,7 +2050,7 @@ async function adminCancel(id){
   const { data: emp } = await db
   .from("employees")
   .select("name,phone")
-  .eq("auth_user_id",leave.employee_id)
+  .eq("id",leave.employee_id)
   .single();
 
   const commentBox = document.getElementById("c_"+id);
@@ -1322,13 +2104,13 @@ async function adminCancel(id){
 async function loadEmployeeFilter(){
 const { data } = await db
 .from("employees")
-.select("auth_user_id,name")
+.select("id,name")
 .order("name");
 
 const dropdown = document.getElementById("employeeFilter");
 
 data.forEach(emp=>{
-dropdown.innerHTML += `<option value="${emp.auth_user_id}">${emp.name}</option>`;
+ dropdown.innerHTML += `<option value="${emp.id}">${emp.name}</option>`;
 });
 }
 
@@ -1396,11 +2178,11 @@ rows+=`
 
 <td>
 
-<button class="edit-emp-btn" data-id="${e.auth_user_id}">
+<button class="edit-emp-btn" data-id="${e.id}">
 Edit
 </button>
 
-<button class="delete-emp-btn" data-id="${e.auth_user_id}">
+<button class="delete-emp-btn" data-id="${e.id}">
 Delete
 </button>
 
@@ -1450,7 +2232,7 @@ async function editEmployee(id){
 const { data } = await db
 .from("employees")
 .select("*")
-.eq("auth_user_id",id)
+.eq("id",id)
 .single()
 
 const salary = prompt("Basic Salary",data.basic_salary || 0)
@@ -1462,7 +2244,7 @@ await db
 basic_salary:salary,
 allowance:allowance
 })
-.eq("auth_user_id",id)
+.eq("id",id)
 
 renderEmployeesPage()
 
@@ -1700,7 +2482,7 @@ currentEmployeeId = id
 const { data } = await db
 .from("employees")
 .select("*")
-.eq("auth_user_id",id)
+.eq("id",id)
 .single()
 
 document.getElementById("empName").value = data.name || ""
@@ -1770,7 +2552,7 @@ if(!confirm("Delete employee?")) return
 await db
 .from("employees")
 .delete()
-.eq("auth_user_id",id)
+.eq("id",id)
 
 renderEmployeesPage()
 
@@ -1828,7 +2610,7 @@ joining_date: document.getElementById("empJoin").value
 const { data, error } = await db
 .from("employees")
 .update(payload)
-.eq("auth_user_id", currentEmployeeId)
+.eq("id", currentEmployeeId)
 .select()
 
 if(error){
@@ -2182,7 +2964,7 @@ continue
 
 /* salary fetch */
 
-const salary = await getEmployeeSalary(emp.auth_user_id,period.end)
+const salary = await getEmployeeSalary(emp.id,period.end)
 
 if(!salary) continue
 
@@ -2206,7 +2988,7 @@ const workedDays = calculateWorkingDays(workStart,workEnd)
 
 /* unpaid leaves */
 
-const unpaid = await calculateUnpaidLeaves(emp.auth_user_id,workStart,workEnd)
+const unpaid = await calculateUnpaidLeaves(emp.id,workStart,workEnd)
 
 /* salary calculation */
 
@@ -2223,14 +3005,14 @@ const grossSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
 const taxYear = getTaxYear(period.start)
 
 /* annual projection */
-const annualIncome = await estimateAnnualIncome(emp.auth_user_id, grossSalary, taxYear, period.start)
+const annualIncome = await estimateAnnualIncome(emp.id, grossSalary, taxYear, period.start)
 
 /* total tax liability */
 const taxResult = await calculateTax(annualIncome)
 const annualTax = taxResult.tax
 
 /* already deducted */
-const taxPaid = await getTaxPaid(emp.auth_user_id, taxYear)
+const taxPaid = await getTaxPaid(emp.id, taxYear)
 
 /* remaining months */
 const payrollDate = new Date(period.start)
@@ -2270,7 +3052,7 @@ breakdown: taxResult.breakdown
 
 await db.from("payroll").insert({
 
-employee_id:emp.auth_user_id,
+employee_id:emp.id,
 
 payroll_month:monthName,
 
@@ -2486,9 +3268,7 @@ const title = document.getElementById("pageTitle");
 
 if(page==="dashboard"){
   title.innerText="Dashboard";
-  loadAdminDashboard();
-  loadUpcomingHolidays();
-  loadTeamCalendar();
+  renderDashboard();
 }
 
 if(page==="requests"){
@@ -2531,6 +3311,18 @@ if(page === "reimbursements"){
   renderReimbursementsPage();
 }
 
+if(page==="projects"){
+  renderProjectsPage();
+}
+
+if(page==="tasks"){
+  renderTasksPage();
+}
+
+if(page === "access"){
+  renderAccessPage();
+}
+
 }
 
 async function renderDashboard(){
@@ -2550,6 +3342,19 @@ const { data: leaves } = await db
 let pending = leaves.filter(l => l.status === "pending").length;
 let approved = leaves.filter(l => l.status === "approved").length;
 let rejected = leaves.filter(l => l.status === "rejected").length;
+
+const { data: tasks } = await db
+.from("tasks")
+.select("status");
+
+const pendingTasks =
+tasks.filter(t=>t.status==="pending").length;
+
+const activeTasks =
+tasks.filter(t=>t.status==="in_progress").length;
+
+const closedTasks =
+tasks.filter(t=>t.status==="closed").length;
 
 const html = `
 <div class="dashboard-grid">
@@ -2598,6 +3403,22 @@ Rejected Requests
 <h3>Team Leave Calendar</h3>
 <div id="teamCalendar"></div>
 </div>
+
+<div class="card">
+  <h3>Pending Tasks</h3>
+  <h1>${pendingTasks}</h1>
+</div>
+
+<div class="card">
+  <h3>Active Tasks</h3>
+  <h1>${activeTasks}</h1>
+</div>
+
+<div class="card">
+  <h3>Closed Tasks</h3>
+  <h1>${closedTasks}</h1>
+</div>
+
 `;
 
 document.getElementById("pageContent").innerHTML = html;
@@ -2616,7 +3437,7 @@ const { data: leaves } = await db
 
 const { data: employees } = await db
 .from("employees")
-.select("auth_user_id,name")
+.select("id,name")
 
 const { data: types } = await db
 .from("leave_types")
@@ -2626,7 +3447,7 @@ const typeMap={}
 types.forEach(t=>typeMap[t.id]=t.name)
 
 const empMap={}
-employees.forEach(e=>empMap[e.auth_user_id]=e.name)
+employees.forEach(e=>empMap[e.id]=e.name)
 
 const body = document.querySelector("#todayLeaveTable tbody")
 
@@ -2680,6 +3501,8 @@ container.innerHTML += `
 
 async function loadTeamCalendar(){
 
+const empId = await getEmployeeId();
+
 const { data: leaves } = await db
 .from("leave_requests")
 .select("*")
@@ -2687,7 +3510,8 @@ const { data: leaves } = await db
 
 const { data: employees } = await db
 .from("employees")
-.select("auth_user_id,name")
+.select("id,name")
+.neq("id",empId)
 
 const today = new Date()
 
@@ -2725,7 +3549,7 @@ let onLeave=false
 leaves.forEach(l=>{
 
 if(
-l.employee_id===emp.auth_user_id &&
+l.employee_id===emp.id &&
 day>=l.start_date &&
 day<=l.end_date
 ){
@@ -2748,6 +3572,143 @@ html+=`</div>`
 
 container.innerHTML=html
 
+}
+
+async function renderAccessPage(){
+
+  document.getElementById("pageContent").innerHTML = `
+    <div class="card">
+      <h3>Employee Role & Team Management</h3>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Manager</th>
+            <th>Save</th>
+          </tr>
+        </thead>
+        <tbody id="accessTable"></tbody>
+      </table>
+    </div>
+  `;
+
+  loadAccessData();
+}
+
+async function loadAccessData(){
+
+  // 1. Employees fetch
+  const { data: employees, error } = await db
+  .from("employees")
+  .select("id,name,role_id,manager_id");
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  // 2. Roles fetch
+  const { data: roles, error: roleError } = await db
+  .from("roles")
+  .select("*");
+
+  if(roleError){
+    showToast(roleError.message,"error");
+    return;
+  }
+
+  let rows = "";
+
+  employees.forEach(emp => {
+
+    // 🔹 Role dropdown
+    let roleOptions = `
+      <option value="">Select Role</option>
+      ${roles.map(r => `
+        <option value="${r.id}" ${r.id === emp.role_id ? "selected" : ""}>
+          ${r.name}
+        </option>
+      `).join("")}
+    `;
+
+    // 🔹 Manager dropdown (self exclude)
+    let managerOptions = `
+      <option value="">None</option>
+      ${employees
+        .filter(e => e.id !== emp.id)
+        .map(e => `
+          <option value="${e.id}" ${e.id === emp.manager_id ? "selected" : ""}>
+            ${e.name}
+          </option>
+        `).join("")}
+    `;
+
+    rows += `
+      <tr>
+        <td>${emp.name}</td>
+
+        <td>
+          <select id="role-${emp.id}" class="input-field">
+            ${roleOptions}
+          </select>
+        </td>
+
+        <td>
+          <select id="manager-${emp.id}" class="input-field">
+            ${managerOptions}
+          </select>
+        </td>
+
+        <td>
+          <button onclick="updateAccess('${emp.id}')">
+            Save
+          </button>
+        </td>
+      </tr>
+    `;
+  });
+
+  document.getElementById("accessTable").innerHTML = rows;
+}
+
+async function updateAccess(userId){
+
+  const role = document.getElementById(`role-${userId}`).value;
+  const manager = document.getElementById(`manager-${userId}`).value || null;
+
+  const { error } = await db
+  .from("employees")
+  .update({
+    role_id: role,
+    manager_id: manager
+  })
+  .eq("id", userId);
+
+  if(!role){
+  showToast("Please select a role","error");
+  return;
+  }
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  showToast("Updated successfully","success");
+}
+
+async function getCurrentUserRole(){
+  const empId = await getEmployeeId();
+
+  const { data } = await db
+  .from("employees")
+  .select("role_id, roles(name)")
+  .eq("id", empId)
+  .single();
+
+  return data?.roles?.name;
 }
 
 function initAllDatePickers(){

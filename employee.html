@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <head>
   <title>Revaya Leave System</title>
 
@@ -34,6 +35,25 @@
         <li onclick="openEmployeePage('reimbursements', this)">
           <i class="fa-solid fa-receipt"></i> Reimbursements
         </li>
+        <li class="menu-group">
+          <div class="menu-parent" onclick="toggleMenu(this)">
+            <div>
+              <i class="fa-solid fa-list-check"></i>
+              Tasks
+            </div>
+            <i class="fa-solid fa-chevron-down menu-arrow"></i>
+          </div>
+          <ul class="submenu">
+            <li onclick="openEmployeePage('teamTasks', this)">
+              <i class="fa-solid fa-user-plus"></i>
+              Assign Tasks
+            </li>
+            <li onclick="openEmployeePage('tasks', this)">
+              <i class="fa-solid fa-user-check"></i>
+              My Tasks
+            </li>
+          </ul>
+        </li>
         <li onclick="logout()">
           <i class="fa-solid fa-right-from-bracket"></i> Logout
         </li>
@@ -58,6 +78,482 @@
 
 let holidays = [];
 let holidayDates = [];
+
+function toggleMenu(el){
+
+  const group =
+  el.closest(".menu-group");
+
+  group.classList.toggle("open");
+}
+
+function renderTeamTasksPage(){
+  document.getElementById("pageContent").innerHTML = `
+    <div class="card">
+      <div style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        margin-bottom:20px;
+      ">
+        <h3>Team Tasks</h3>
+        <button onclick="openEmployeeTaskModal()">
+          Create Task
+        </button>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Project</th>
+              <th>Assigned To</th>
+              <th>Status</th>
+              <th>Deadline</th>
+            </tr>
+          </thead>
+          <tbody id="teamTaskTable"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  loadTeamTasks();
+}
+
+async function loadTeamTasks(){
+  const empId = await getEmployeeId();
+  const { data,error } = await db
+  .from("tasks")
+  .select(`
+    *,
+    projects(name),
+    employees!tasks_assigned_to_fkey(name)
+  `)
+  .eq("assigned_by", empId)
+  .order("created_at",{ascending:false});
+
+  if(error){
+    console.error(error);
+    return;
+  }
+
+  let rows = "";
+  data.forEach(t=>{
+    rows += `
+      <tr>
+        <td>${t.title}</td>
+        <td>${t.projects?.name || "-"}</td>
+        <td>${t.employees?.name || "-"}</td>
+        <td>${t.status}</td>
+        <td>${t.deadline || "-"}</td>
+      </tr>
+    `;
+  });
+  document.getElementById("teamTaskTable").innerHTML = rows;
+}
+
+async function openEmployeeTaskModal(){
+  const empId = await getEmployeeId();
+  const { data:employees } = await db
+  .from("employees")
+  .select("id,name")
+  .or(`manager_id.eq.${empId},id.eq.${empId}`)
+  .order("name");
+
+  const { data:projects } = await db
+  .from("projects")
+  .select("id,name")
+  .eq("status","active");
+
+  let employeeOptions = "";
+  let projectOptions = "";
+
+  employees.forEach(e=>{
+    employeeOptions += `
+      <option value="${e.id}">
+        ${e.name}
+      </option>
+    `;
+  });
+
+  projects.forEach(p=>{
+    projectOptions += `
+      <option value="${p.id}">
+        ${p.name}
+      </option>
+    `;
+  });
+
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.style.display = "flex";
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h3>Create Task</h3>
+      <div class="form-grid">
+        <div class="form-field">
+          <label>Project</label>
+          <select id="empTaskProject" class="input-field">
+            ${projectOptions}
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Assign To</label>
+          <select id="empTaskAssign" class="input-field">
+            ${employeeOptions}
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Title</label>
+          <input id="empTaskTitle" class="input-field">
+        </div>
+        <div class="form-field">
+          <label>Deadline</label>
+          <input type="date" id="empTaskDeadline" class="input-field">
+        </div>
+        <div class="form-field">
+          <label>Allocated Hours</label>
+          <input type="number" id="empTaskHours" class="input-field">
+        </div>
+      </div>
+      <div class="form-field">
+        <label>Description</label>
+        <textarea id="empTaskDesc" class="input-field" style="width:100%; min-height:100px;"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button onclick="createEmployeeTask(this)">
+          Create Task
+        </button>
+        <button
+          class="secondary-btn" onclick="this.closest('.modal').remove()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+async function createEmployeeTask(btn){
+  const empId = await getEmployeeId();
+  const payload = {
+    project_id:document.getElementById("empTaskProject").value,
+    assigned_to:document.getElementById("empTaskAssign").value,
+    title:document.getElementById("empTaskTitle").value,
+    description:document.getElementById("empTaskDesc").value,
+    deadline:document.getElementById("empTaskDeadline").value,
+    allotted_hours:Number(document.getElementById("empTaskHours").value),
+    assigned_by:empId,
+    status:"pending"
+  };
+
+  const { error } = await db
+  .from("tasks")
+  .insert(payload);
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  btn.closest(".modal").remove();
+  showToast("Task created","success");
+  loadTeamTasks();
+}
+
+async function loadManagerTeamLeaves() {
+
+  const empId = await getEmployeeId();
+
+  const { data, error } = await db
+    .from("leave_requests")
+    .select(`
+      *,
+      employees!leave_requests_employee_id_fkey(name)
+    `)
+    .neq("employee_id", empId)
+    .eq("status","approved")
+    .order("start_date", { ascending: true });
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  renderManagerCalendar(data);
+}
+
+function renderManagerCalendar(leaves){
+
+  if(!leaves) return;
+
+  // 🔴 next 7 days
+  const today = new Date();
+  let days = [];
+
+  for(let i=0;i<7;i++){
+    let d = new Date();
+    d.setDate(today.getDate()+i);
+    days.push(d.toISOString().split("T")[0]);
+  }
+
+  const container = document.getElementById("managerCalendar");
+  container.innerHTML = "";
+
+  let html = `<div class="calendar-grid">`;
+
+  // header
+  html += `<div></div>`;
+  days.forEach(d=>{
+    html += `<div class="calendar-header">${d.slice(5)}</div>`;
+  });
+
+  // 🔴 group by employee
+  const grouped = {};
+
+  leaves.forEach(l=>{
+    const name = l.employees?.name || "Unknown";
+
+    if(!grouped[name]) grouped[name] = [];
+    grouped[name].push(l);
+  });
+
+  // 🔴 rows
+  Object.keys(grouped).forEach(name=>{
+
+    html += `<div class="calendar-name">${name}</div>`;
+
+    days.forEach(day=>{
+
+      let onLeave = false;
+
+      grouped[name].forEach(l=>{
+        if(day >= l.start_date && day <= l.end_date){
+          onLeave = true;
+        }
+      });
+
+      html += `
+        <div class="calendar-day ${onLeave ? "calendar-leave" : ""}">
+          ${onLeave ? "L" : ""}
+        </div>
+      `;
+    });
+
+  });
+
+  html += `</div>`;
+
+  container.innerHTML = html;
+}
+
+async function checkManagerAndLoad(){
+
+  const empId = await getEmployeeId();
+  const { data } = await db
+    .from("employees")
+    .select("id")
+    .eq("manager_id", empId);
+
+  if(data && data.length > 0){
+    document.getElementById("managerSection").style.display = "block";
+    loadManagerTeamLeaves();
+  }
+}
+
+function renderTasksPage(){
+  document.getElementById("pageContent").innerHTML = `
+    <div class="card">
+      <h3>My Tasks</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th>Project</th>
+              <th>Status</th>
+              <th>Deadline</th>
+              <th>Allocated Hours</th>
+              <th>Tracked Time</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="taskTable"></tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  loadMyTasks();
+}
+
+async function loadMyTasks(){
+  const empId = await getEmployeeId();
+  const { data, error } = await db
+  .from("tasks")
+  .select(`
+    *,
+    projects(name),
+    task_logs(duration,end_time)
+  `)
+  .eq("assigned_to", empId)
+  .order("created_at",{ascending:false});
+
+  if(error){
+    showToast(error.message,"error");
+    return;
+  }
+
+  let rows = "";
+
+  data.forEach(t=>{
+    let totalMinutes = 0;
+    if(t.task_logs){
+      t.task_logs.forEach(log=>{
+        totalMinutes += log.duration || 0;
+      });
+    }
+
+    const hours = Math.floor(totalMinutes / 3600);
+    const mins = Math.floor((totalMinutes % 3600) / 60);
+    const secs = totalMinutes % 60;
+    const tracked = `${hours}h ${mins}m ${secs}s`;
+    rows += `
+      <tr>
+        <td>${t.title}</td>
+        <td>${t.projects?.name || "-"}</td>
+        <td>
+          <span class="badge ${
+            t.status === "completed"
+            ? "badge-good"
+            : t.status === "in_progress"
+            ? "badge-pending"
+            : "badge-bad"
+          }">
+            ${t.status}
+          </span>
+        </td>
+        <td>${t.deadline || "-"}</td>
+        <td>${t.allotted_hours || 0}h</td>
+        <td>${tracked}</td>
+        <td>
+          ${
+            t.status === "pending"
+            ? `
+              <button onclick="startTask('${t.id}')">
+                Start
+              </button>
+            `
+            : ""
+          }
+          ${
+            t.status === "in_progress"
+            ? `
+              <button class="danger-btn" onclick="stopTask('${t.id}')">
+                Stop
+              </button>
+            `
+            : ""
+          }
+          ${
+            t.status !== "submitted"
+            ? `
+              <button class="success-btn"
+                onclick="completeTask('${t.id}')">
+                Complete
+              </button>
+            `
+            : ""
+          }
+        </td>
+      </tr>
+    `;
+  });
+  document.getElementById("taskTable").innerHTML = rows;
+}
+
+async function startTask(taskId){
+  const empId = await getEmployeeId();
+  const { data:active } = await db
+  .from("task_logs")
+  .select("id")
+  .eq("employee_id", empId)
+  .is("end_time", null);
+
+  if(active && active.length > 0){
+    showToast("Finish active task first","error");
+    return;
+  }
+
+  await db.from("task_logs").insert({
+    task_id: taskId,
+    employee_id: empId,
+    start_time: new Date().toISOString()
+  });
+
+  await db.from("tasks")
+  .update({
+    status:"in_progress"
+  })
+  .eq("id", taskId);
+
+  showToast("Task started","success");
+  loadMyTasks();
+}
+
+async function stopTask(taskId){
+  const empId = await getEmployeeId();
+  const { data:log } = await db
+  .from("task_logs")
+  .select("*")
+  .eq("task_id", taskId)
+  .eq("employee_id", empId)
+  .is("end_time", null)
+  .single();
+
+  if(!log) return;
+
+  const start = new Date(log.start_time).getTime();
+  const endDate = new Date();
+  const end = new Date().getTime();
+  const diff = Math.floor((end - start) / 1000);
+
+  await db.from("task_logs")
+  .update({
+    end_time:endDate.toISOString(),
+    duration:diff
+  })
+  .eq("id", log.id);
+
+  await db.from("tasks")
+  .update({
+    status:"pending"
+  })
+  .eq("id", taskId);
+
+  showToast("Task stopped","success");
+  loadMyTasks();
+}
+
+async function completeTask(taskId){
+  const empId = await getEmployeeId();
+
+  await db.from("task_logs")
+  .update({
+    end_time:new Date().toISOString()
+  })
+  .eq("task_id", taskId)
+  .eq("employee_id", empId)
+  .is("end_time", null);
+
+  await db.from("tasks")
+  .update({
+    status:"submitted"
+  })
+  .eq("id", taskId);
+
+  showToast("Task submitted","success");
+  loadMyTasks();
+}
 
 function renderReimbursementsPage(){
 
@@ -280,9 +776,15 @@ function renderDashboard(){
 
   document.getElementById("pageContent").innerHTML = `
     <div id="balanceCards" class="balance-grid"></div>
+
+    <div class="card team-calendar" id="managerSection" style="display:none;">
+      <h3>Team Leave Calendar</h3>
+      <div id="managerCalendar"></div>
+    </div>
   `;
 
   loadLeaveBalance();
+  checkManagerAndLoad();
 }
 
 function openEmployeePage(page, el){
@@ -312,6 +814,14 @@ function openEmployeePage(page, el){
   if(page === "reimbursements"){
     renderReimbursementsPage();
   }
+
+  if(page === "tasks"){
+  renderTasksPage();
+  }
+
+  if(page === "teamTasks"){
+  renderTeamTasksPage();
+}
 }
 
 async function submitExpense(){
@@ -324,7 +834,7 @@ async function submitExpense(){
     return;
   }
 
-  const userId = sessionData.session.user.id;
+  const empId = await getEmployeeId();
 
   const amount = document.getElementById("expAmount").value;
   const category = document.getElementById("expCategory").value;
@@ -369,7 +879,7 @@ async function submitExpense(){
       return;
     }
 
-    const path = `${userId}/${Date.now()}_${file.name}`;
+    const path = `${empId}/${Date.now()}_${file.name}`;
 
     const { error } = await db.storage
     .from("receipts")
@@ -390,8 +900,7 @@ async function submitExpense(){
 
   // 🔥 insert DB
   const { error } = await db.from("reimbursements").insert({
-
-    employee_id: userId,
+    employee_id: empId,
     amount: amount,
     category: category,
     description: desc,
@@ -414,12 +923,12 @@ async function submitExpense(){
 
 async function loadExpenses(){
 
-  const { data:userData } = await db.auth.getUser();
+  const empId = await getEmployeeId();
 
   const { data } = await db
   .from("reimbursements")
   .select("*")
-  .eq("employee_id",userData.user.id)
+  .eq("employee_id",empId)
   .order("created_at",{ascending:false});
 
   let rows = "";
@@ -497,6 +1006,7 @@ function viewReceipt(url){
 async function loadUserName(){
 
 const { data:userData } = await db.auth.getUser()
+const empId = await getEmployeeId();
 
 if(!userData.user){
 window.location="index.html"
@@ -506,22 +1016,21 @@ return
 let { data:emp } = await db
 .from("employees")
 .select("name")
-.eq("auth_user_id",userData.user.id)
+.eq("id",empId)
 .single()
 
 if(!emp){
+  const meta = userData.user.user_metadata
 
-const meta = userData.user.user_metadata
+  await db.from("employees").insert({
+  auth_user_id:userData.user.id,
+  name:meta.name || "Employee",
+  email:userData.user.email,
+  phone:meta.phone || "",
+  role:"employee"
+  })
 
-await db.from("employees").insert({
-auth_user_id:userData.user.id,
-name:meta.name || "Employee",
-email:userData.user.email,
-phone:meta.phone || "",
-role:"employee"
-})
-
-emp = { name: meta.name || "Employee" }
+  emp = { name: meta.name || "Employee" }
 
 }
 
@@ -543,12 +1052,12 @@ async function getEmployeeId() {
 
 async function loadPayslips(){
 
-const { data:userData } = await db.auth.getUser()
+const empId = await getEmployeeId();
 
 const { data } = await db
 .from("payroll")
 .select("*")
-.eq("employee_id",userData.user.id)
+.eq("employee_id",empId)
 .order("created_at",{ascending:false})
 
 let rows=""
@@ -587,7 +1096,7 @@ async function generatePayslip(payroll){
   const { data: emp } = await db
   .from("employees")
   .select("name,email,job_title,department")
-  .eq("auth_user_id", payroll.employee_id)
+  .eq("id", payroll.employee_id)
   .single()
 
   const doc = new jsPDF()
@@ -719,13 +1228,21 @@ async function generatePayslip(payroll){
 }
 
 async function applyLeave() {
+  const { data: sessionData } = await db.auth.getSession();
+
+  if (!sessionData.session) {
+    hideLoader();
+    showToast("Session expired. Please login again","error");
+    return;
+  }
+  
   showLoader("Submitting leave...");
-  const { data: userData } = await db.auth.getUser();
+  const empId = await getEmployeeId();
   const ptoValue = document.querySelector('input[name="ptoType"]:checked').value === "true";
   const isHalf = document.getElementById("isHalfDay").checked;
   const session = isHalf ? document.getElementById("halfDaySession").value : null;
   const { data, error } = await db.from("leave_requests").insert({
-  employee_id: userData.user.id,
+  employee_id: empId,
   type_id: leaveType.value,
   is_half_day: isHalf,
   half_day_session: session,
@@ -735,18 +1252,10 @@ async function applyLeave() {
   })
   .select()
   .single();
+
   if(error){
-  hideLoader();
-  showToast(error.message,"error");
-  return;
-  }
-
-  const { data: sessionData } = await db.auth.getSession();
-
-  if (!sessionData.session) {
-    console.error("❌ No session found");
     hideLoader();
-    showToast("Session expired. Please login again","error");
+    showToast(error.message,"error");
     return;
   }
 
@@ -764,12 +1273,6 @@ async function applyLeave() {
     })
   });
 
-  const { data: emp } = await db
-  .from("employees")
-  .select("name,phone,email")
-  .eq("auth_user_id", userData.user.id)
-  .single();
-
   const leaveDays = (document.getElementById("leaveDaysPreview").innerText || "")
   .replace("Total Leave Days: ","")
   .trim();
@@ -781,6 +1284,7 @@ async function applyLeave() {
 
 async function loadRequests(){
 
+const empId = await getEmployeeId();
 const selectedStatus = document.getElementById("empStatusFilter").value;
 const fromDate = document.getElementById("empFromDate").value;
 const toDate = document.getElementById("empToDate").value;
@@ -790,6 +1294,7 @@ const ptoFilter = document.getElementById("empPtoFilter").value;
 let query = db
 .from("leave_requests")
 .select("*")
+.eq("employee_id", empId)
 .order("created_at",{ascending:false});
 
 if(selectedStatus !== "all"){
@@ -851,8 +1356,7 @@ data.forEach(r=>{body.innerHTML+=`
 
 async function loadLeaveBalance(){
 
-const { data: userData } = await db.auth.getUser();
-const userId = userData.user.id;
+const empId = await getEmployeeId();
 
 const { data: types } = await db
 .from("leave_types")
@@ -863,7 +1367,9 @@ const currentYear = new Date().getFullYear();
 const { data: approvedLeaves } = await db
 .from("leave_requests")
 .select("type_id, days, start_date")
-.eq("status","approved");
+.eq("status","approved")
+.eq("employee_id", empId)
+.order("created_at",{ascending:false});
 
 const usedMap = {};
 
@@ -953,7 +1459,7 @@ async function cancelLeave(id){
 
   }catch(e){
     hideLoader();
-    console.error("Sheet update failed", e);
+    showToast("Sheet update failed:" + e,"error");
   }
     hideLoader();
     showToast("Leave request cancelled","success");
@@ -977,12 +1483,12 @@ dropdown.innerHTML += `<option value="${type.id}">${type.name}</option>`;
 
 async function detectLeaveConflict(start,end){
 
-const { data:userData } = await db.auth.getUser();
+const empId = await getEmployeeId();
 
 const { data:leaves } = await db
 .from("leave_requests")
 .select("start_date,end_date,status")
-.eq("employee_id",userData.user.id)
+.eq("employee_id", empId)
 .in("status",["approved","pending"]);
 
 if(!leaves) return null;

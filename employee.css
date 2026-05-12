@@ -95,33 +95,6 @@ padding:20px;
   color:#3b82f6;
 }
 
-.menu{
-  list-style:none;
-  padding:0;
-}
-
-.menu li{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding:12px 14px;
-  border-radius:8px;
-  margin-bottom:8px;
-  cursor:pointer;
-  transition:0.2s;
-}
-
-/* 🔥 hover animation */
-.menu li:hover{
-  background:#1f2937;
-  transform:translateX(4px);
-}
-
-/* 🔥 active state */
-.menu li.active{
-  background:#2563eb;
-  color:white;
-}
 
 /* ===== MAIN AREA ===== */
 
@@ -242,28 +215,52 @@ font-size:13px;
 color:#f59e0b;
 }
 
-.date-field{
-position:relative;
-width:100%;
+.team-calendar{
+background:white;
+padding:20px;
+border-radius:12px;
+margin-top:25px;
 }
 
-.date-field input{
-width:100%;
-padding:10px 38px 10px 12px;
-border:1px solid #ddd;
-border-radius:8px;
-font-size:14px;
+.team-calendar{
+background:white;
+padding:20px;
+border-radius:12px;
+margin-top:25px;
 }
 
-.calendar-icon{
-position:absolute;
-right:10px;
-top:50%;
-transform:translateY(-50%);
-font-size:16px;
-opacity:0.6;
-pointer-events:none;
+.calendar-grid{
+display:grid;
+grid-template-columns:150px repeat(7,1fr);
+gap:6px;
+font-size:13px;
 }
+
+.calendar-header{
+font-weight:600;
+text-align:center;
+}
+
+.calendar-name{
+font-weight:600;
+}
+
+.calendar-day{
+height:28px;
+border-radius:6px;
+background:#f1f5f9;
+text-align:center;
+line-height:28px;
+}
+
+.calendar-leave{
+background:#2563eb;
+color:white;
+}
+
+
+
+
 
 #pageContent{
   flex:1;

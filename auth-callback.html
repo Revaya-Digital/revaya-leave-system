@@ -25,41 +25,55 @@ return
 const user = userData.user
 
 /* check if employee already exists */
-
 let { data:emp } = await db
 .from("employees")
 .select("*")
 .eq("auth_user_id",user.id)
-.single()
+.maybeSingle();
 
 /* create employee if missing */
-
 if(!emp){
+  const { data: roleData } = await db
+    .from("roles")
+    .select("id")
+    .eq("name","employee")
+    .single();  
 
-const meta = user.user_metadata
+  const meta = user.user_metadata
 
-await db.from("employees").insert({
-auth_user_id: user.id,
-email: user.email,
-name: meta?.name || "",
-phone: meta?.phone || "",
-role: "employee"
-})
-
+  const { error: insertError } = await db
+  .from("employees")
+  .insert({
+    auth_user_id: user.id,
+    email: user.email,
+    name: meta?.name || "",
+    phone: meta?.phone || "",
+    role_id: roleData.id 
+  })
 }
 
 /* redirect based on role */
+const { data: employee } = await db
+  .from("employees")
+  .select("role_id")
+  .eq("auth_user_id", user.id)
+  .maybeSingle();
 
-const { data:employee } = await db
-.from("employees")
-.select("role")
-.eq("auth_user_id",user.id)
-.single()
+const { data: role } = await db
+  .from("roles")
+  .select("name")
+  .eq("id", emp.role_id)
+  .maybeSingle();
 
-if(employee.role === "admin"){
-window.location="admin.html"
+if(!role){
+  alert("User Role not found");
+  return;
+}
+
+if(role.name === "admin"){
+  window.location="admin.html"
 }else{
-window.location="employee.html"
+  window.location="employee.html"
 }
 
 }

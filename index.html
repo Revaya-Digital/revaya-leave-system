@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <head>
   <title>Revaya Leave System</title>
   
@@ -11,6 +12,7 @@
   <script src="supabase_client.js"></script>
 </head>
 
+<body>
 <div class="login-container">
 
 <div class="hero-header">
@@ -88,7 +90,7 @@ Employee Leave Management Portal
 
 
 <script>
-async function login(event) {
+async function login(event) { 
 
 event.preventDefault();
 
@@ -116,19 +118,33 @@ errorBox.innerText=error.message;
 return;
 }
 
-showToast("Login Successful","success");
+const user = data.user;
 const { data: userData } = await db.auth.getUser();
 
 const { data: emp } = await db
 .from("employees")
-.select("role")
-.eq("auth_user_id", userData.user.id)
+.select("role_id")
+.eq("auth_user_id", user.id)
 .single();
 
-if(emp.role === "admin"){
-window.location = "admin.html";
-} else {
-window.location = "employee.html";
+if(!emp){
+  showToast("Access not configured","error");
+  window.location = "auth-callback.html";
+  return;
+}
+
+const { data: role } = await db
+.from("roles")
+.select("name")
+.eq("id", emp.role_id)
+.single();
+
+showToast("Login Successful","success");
+
+if(role.name === "admin"){
+  window.location = "admin.html";
+}else{
+  window.location = "employee.html";
 }
 }
 
@@ -339,3 +355,6 @@ showToast("Password reset link sent to email","success");
     <p id="loaderText">Processing...</p>
   </div>
 </div>
+
+</body>
+</html>
