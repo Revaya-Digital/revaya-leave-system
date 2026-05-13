@@ -1664,7 +1664,7 @@ async function createTask(btn){
     assigned_by: empId,
     deadline: deadline,
     status: "pending",
-    alloted_hours: Number(hours)
+    allotted_hours: Number(hours)
   });
 
   btn.disabled = false;
@@ -1787,7 +1787,7 @@ async function openEditTaskModal(taskId){
             type="number"
             id="editTaskHours"
             class="input-field"
-            value="${task.alloted_hours || 0}"
+            value="${task.allotted_hours || 0}"
           >
         </div>
 
@@ -1902,7 +1902,7 @@ async function updateTask(taskId,btn){
     status:
       document.getElementById("editTaskStatus").value,
 
-    alloted_hours:
+    allotted_hours:
       Number(document.getElementById("editTaskHours").value)
 
   };
