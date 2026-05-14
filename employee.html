@@ -90,26 +90,80 @@ function toggleMenu(el){
 function renderTeamTasksPage(){
   document.getElementById("pageContent").innerHTML = `
     <div class="card">
-      <div style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        margin-bottom:20px;
-      ">
-        <h3>Team Tasks</h3>
+      <div style=" display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h3>Tasks</h3>
         <button onclick="openEmployeeTaskModal()">
           Create Task
         </button>
       </div>
-      <div class="table-wrapper">
-        <table>
+      <div class="filters-bar">
+        <div class="filters">
+          <div class="form-field">
+            <label>Status</label>
+            <div class="select-wrapper">
+              <select class="input-field select-field" id="taskStatusFilter" onchange="loadTeamTasks()">
+                <option value="all">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+            </div>
+          </div>
+
+
+          <div class="form-field">
+            <label>Employee</label>
+            <div class="select-wrapper">
+              <select class="input-field select-field" id="taskEmployeeFilter" onchange="loadTeamTasks()">
+                <option value="all">All Employees</option>
+              </select>
+            </div>
+          </div>
+          
+          <div class="form-field">
+            <label>Project</label>
+            <div class="select-wrapper">
+              <select class="input-field select-field" id="taskProjectFilter" onchange="loadTeamTasks()">
+                <option value="all">All Projects</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>From Date</label>
+            <div class="date-field">
+              <input type="text" class="date-input" id="taskFromDeadlineFilter" placeholder="Deadline" onchange="loadTeamTasks()">
+              <span class="calendar-icon">📅</span>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>To Date</label>
+            <div class="date-field">
+              <input type="text" class="date-input" id="taskToDeadlineFilter" placeholder="To Deadline" onchange="loadTeamTasks()">
+              <span class="calendar-icon">📅</span>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label>Search</label>
+            <input type="text" class="input-field" id="taskSearchFilter" placeholder="Search Task..." oninput="filterTable('taskSearchFilter', 'taskTable')">
+          </div>
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table id="taskTable">
           <thead>
             <tr>
               <th>Task</th>
               <th>Project</th>
               <th>Assigned To</th>
+              <th>Assigned By</th>
               <th>Status</th>
+              <th>Allotted Hrs</th>
               <th>Deadline</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="teamTaskTable"></tbody>
@@ -117,38 +171,135 @@ function renderTeamTasksPage(){
       </div>
     </div>
   `;
+
+  loadEmployeeFilter('taskEmployeeFilter');
+  loadProjectFilter('taskProjectFilter');
+  initAllDatePickers();
   loadTeamTasks();
 }
 
-async function loadTeamTasks(){
+function filterTable(inputId, tableId){
+  const input = document.getElementById(inputId).value.toLowerCase();
+  const rows = document.querySelectorAll(`#${tableId} tbody tr`);
+  rows.forEach(row=>{
+    const text = row.innerText.toLowerCase();
+    row.style.display = text.includes(input) ? "" : "none";
+  });
+}
+
+async function loadEmployeeFilter(selectid){
   const empId = await getEmployeeId();
-  const { data,error } = await db
+  const { data:employees } = await db
+  .from("employees")
+  .select("id,name")
+  .or(`manager_id.eq.${empId},id.eq.${empId}`)
+  .order("name");
+
+  const dropdown = document.getElementById(selectid);
+
+  employees.forEach(emp=>{
+    dropdown.innerHTML += `<option value="${emp.id}">${emp.name}</option>`;
+  });
+}
+
+async function loadProjectFilter(selectid){
+const { data } = await db
+.from("projects")
+.select("id,name")
+.order("name");
+
+const dropdown = document.getElementById(selectid);
+
+data.forEach(proj=>{
+ dropdown.innerHTML += `<option value="${proj.id}">${proj.name}</option>`;
+});
+}
+
+async function loadTeamTasks(){
+  const selectedStatus = document.getElementById("taskStatusFilter").value;
+  const selectedEmployee = document.getElementById("taskEmployeeFilter").value;
+  const selectedProject = document.getElementById("taskProjectFilter").value;
+  const selectedDeadlineFrom = document.getElementById("taskFromDeadlineFilter").value;
+  const selectedDeadlineTo = document.getElementById("taskToDeadlineFilter").value;
+
+  let query = db
   .from("tasks")
   .select(`
     *,
-    projects(name),
-    employees!tasks_assigned_to_fkey(name)
+    projects!tasks_project_id_fkey(name),
+    assignee:employees!tasks_assigned_to_fkey(name),
+    assigner:employees!tasks_assigned_by_fkey(name)
   `)
-  .eq("assigned_by", empId)
   .order("created_at",{ascending:false});
 
+  if(selectedStatus !== "all"){
+  query = query.eq("status",selectedStatus);
+  }
+
+  if(selectedEmployee !== "all"){
+  query = query.eq("assigned_to",selectedEmployee);
+  }
+
+  if(selectedProject !== "all"){
+  query = query.eq("project_id",selectedProject);
+  }
+
+  if(selectedDeadlineFrom){
+  query = query.gte("deadline",selectedDeadlineFrom);
+  }
+
+  if(selectedDeadlineTo){
+  query = query.lte("deadline",selectedDeadlineTo);
+  }
+
+  const { data: tasks, error } = await query;
+
   if(error){
-    console.error(error);
+    showToast(error.message,"error");
     return;
   }
 
   let rows = "";
-  data.forEach(t=>{
-    rows += `
+
+  tasks.forEach(t=>{
+    rows+=`
       <tr>
         <td>${t.title}</td>
-        <td>${t.projects?.name || "-"}</td>
-        <td>${t.employees?.name || "-"}</td>
-        <td>${t.status}</td>
-        <td>${t.deadline || "-"}</td>
+        <td>
+          ${t.projects?.name || "-"}
+        </td>
+        <td>
+          ${t.assignee?.name || "-"}
+        </td>
+        <td>
+          ${t.assigner?.name || "-"}
+        </td>
+        <td>
+          <span class="badge ${
+            t.status === "closed" || t.status === "submitted"
+            ? "badge-good"
+            : t.status === "in_progress"
+            ? "badge-pending"
+            : "badge-bad"
+          }">
+            ${t.status}
+          </span>
+        </td>
+        <td>
+          ${t.allotted_hours || 0} hrs
+        </td>
+        <td>
+          ${t.deadline || "-"}
+        </td>
+        <td>
+          <button onclick="openEditTaskModal('${t.id}')">
+            Edit
+          </button>
+        </td>
       </tr>
     `;
   });
+
   document.getElementById("teamTaskTable").innerHTML = rows;
 }
 
@@ -1709,6 +1860,38 @@ document.addEventListener("change", function(e){
     }
 
   });
+
+function initAllDatePickers(){
+  document.querySelectorAll(".date-input").forEach(input => {
+    /* destroy old instance */
+    if(input._flatpickr){
+      input._flatpickr.destroy();
+    }
+
+    /* init flatpickr */
+    flatpickr(input,{
+      dateFormat:"Y-m-d",
+      disable:[
+        function(date){
+          return date.getDay() === 0;
+        }
+      ]
+    });
+
+    /* icon click */
+    const icon = input.parentElement.querySelector(".calendar-icon");
+
+    if(icon){
+      icon.style.cursor = "pointer";
+
+      icon.onclick = () => {
+        input._flatpickr.open();
+      };
+    }
+
+  });
+
+}
 
 openEmployeePage("dashboard");
 </script>
