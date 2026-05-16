@@ -98,61 +98,62 @@ function renderTeamTasksPage(){
       </div>
       <div class="filters-bar">
         <div class="filters">
-          <div class="form-field">
-            <label>Status</label>
-            <div class="select-wrapper">
-              <select class="input-field select-field" id="taskStatusFilter" onchange="loadTeamTasks()">
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
+          <div class="form-row">
+            <div class="form-field">
+              <label>Status</label>
+              <div class="select-wrapper">
+                <select class="input-field select-field" id="taskStatusFilter" onchange="loadTeamTasks()">
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-
-          <div class="form-field">
-            <label>Employee</label>
-            <div class="select-wrapper">
-              <select class="input-field select-field" id="taskEmployeeFilter" onchange="loadTeamTasks()">
-                <option value="all">All Employees</option>
-              </select>
+            <div class="form-field">
+              <label>Employee</label>
+              <div class="select-wrapper">
+                <select class="input-field select-field" id="taskEmployeeFilter" onchange="loadTeamTasks()">
+                  <option value="all">All Employees</option>
+                </select>
+              </div>
             </div>
-          </div>
           
-          <div class="form-field">
-            <label>Project</label>
-            <div class="select-wrapper">
-              <select class="input-field select-field" id="taskProjectFilter" onchange="loadTeamTasks()">
-                <option value="all">All Projects</option>
-              </select>
+            <div class="form-field">
+              <label>Project</label>
+              <div class="select-wrapper">
+                <select class="input-field select-field" id="taskProjectFilter" onchange="loadTeamTasks()">
+                  <option value="all">All Projects</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>From Date</label>
-            <div class="date-field">
-              <input type="text" class="date-input" id="taskFromDeadlineFilter" placeholder="Deadline" onchange="loadTeamTasks()">
-              <span class="calendar-icon">📅</span>
+            <div class="form-field">
+              <label>From Date</label>
+              <div class="date-field">
+                <input type="text" class="date-input" id="taskFromDeadlineFilter" placeholder="Deadline" onchange="loadTeamTasks()">
+                <span class="calendar-icon">📅</span>
+              </div>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>To Date</label>
-            <div class="date-field">
-              <input type="text" class="date-input" id="taskToDeadlineFilter" placeholder="To Deadline" onchange="loadTeamTasks()">
-              <span class="calendar-icon">📅</span>
+            <div class="form-field">
+              <label>To Date</label>
+              <div class="date-field">
+                <input type="text" class="date-input" id="taskToDeadlineFilter" placeholder="To Deadline" onchange="loadTeamTasks()">
+                <span class="calendar-icon">📅</span>
+              </div>
             </div>
-          </div>
 
-          <div class="form-field">
-            <label>Search</label>
-            <input type="text" class="input-field" id="taskSearchFilter" placeholder="Search Task..." oninput="filterTable('taskSearchFilter', 'taskTable')">
+            <div class="form-field">
+              <label>Search</label>
+              <input type="text" class="input-field" id="taskSearchFilter" placeholder="Search Task..." oninput="filterTable('taskSearchFilter', 'taskTable')">
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="table-container">
+      <div class="table-wrapper">
         <table id="taskTable">
           <thead>
             <tr>
@@ -811,27 +812,7 @@ function renderLeavesPage(){
         <div class="form-field">
           <label>Leave Type</label>
           <select id="leaveType" class="input-field"></select>
-        </div>
-        <div class="form-field">
-          <label>PTO Type</label>
-          <div class="radio-group">
-                <label><input type="radio" name="ptoType" value="true" checked>Paid</label>
-                <label><input type="radio" name="ptoType" value="false">Unpaid</label>
-          </div>
-        </div>
-        <div class="form-field">
-          <label>
-            <input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
-            Half Day
-          </label>
-        </div>
-        <div class="form-field" id="halfSessionBox" style="display:none">
-          <label>Session</label>
-          <select id="halfDaySession">
-            <option value="first_half">First Half</option>
-            <option value="second_half">Second Half</option>
-          </select>
-        </div>
+        </div>        
         <div class="form-field">
           <label>Start Date</label>
           <div class="date-field">
@@ -839,11 +820,29 @@ function renderLeavesPage(){
             <span class="calendar-icon">📅</span>
           </div>
         </div>
-        <div class="form-field"
+        <div class="form-field">
           <label>End Date</label>
           <div class="date-field">
             <input type="text" id="endDate" placeholder="End date" onchange="calculatePreview()">
             <span class="calendar-icon">📅</span>
+          </div>
+        </div>
+        <div class="form-field">
+          <label> Half Day </label>
+          <input type="checkbox" id="isHalfDay" onchange="toggleHalfSession();calculatePreview()">
+          <div class="form-field" id="halfSessionBox" style="display:none">
+            <label>Session</label>
+            <select id="halfDaySession">
+              <option value="first_half">First Half</option>
+              <option value="second_half">Second Half</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-field">
+          <label>PTO Type</label>
+          <div class="radio-group">
+                <label><input type="radio" name="ptoType" value="true" checked>Paid</label>
+                <label><input type="radio" name="ptoType" value="false">Unpaid</label>
           </div>
         </div>
       </div>
@@ -857,6 +856,7 @@ function renderLeavesPage(){
       </button>
     </div>
     <div class="card">
+      <h3>Leave History</h3>
       <strong>Filters: </strong>
       <div class="form-row">
         <div class="form-field">
@@ -871,11 +871,17 @@ function renderLeavesPage(){
         </div>
         <div class="form-field">
           <label>From:</label>
-          <input type="date" id="empFromDate" onchange="loadRequests()">
+          <div class="date-field">
+            <input type="text" id="empFromDate" class="date-input" placeholder="Start date" onchange="loadRequests()">
+            <span class="calendar-icon">📅</span>
+          </div>
         </div>
         <div class="form-field">
-          <label>To:</label> 
-          <input type="date" id="empToDate" onchange="loadRequests()">
+          <label>To:</label>
+          <div class="date-field">
+            <input type="text" id="empToDate" class="date-input" placeholder="End date" onchange="loadRequests()">
+            <span class="calendar-icon">📅</span>
+          </div>
         </div>
         <div class="form-field">
           <label>Leave Type:</label> 
@@ -892,9 +898,8 @@ function renderLeavesPage(){
           </select>
         </div>
       </div>
-    </div>
-    <div class="card">
-      <h3>Your Leave History</h3>
+      <br>  
+      <strong>Previous Leaves: </strong>
       <div class="table-wrapper">
         <table border="1" id="leaveTable">
           <thead>
@@ -920,6 +925,7 @@ function renderLeavesPage(){
   loadLeaveTypes();
   loadRequests();
   loadHolidays();
+  initAllDatePickers();
   initCalendar();
 }
 
@@ -1760,81 +1766,81 @@ holidayDates = data.map(h => h.holiday_date);
 }
 
 function initCalendar(){
+  flatpickr("#startDate",{
+    dateFormat:"Y-m-d",
+    disable:[function(date){
+        return date.getDay() === 0;
+      }
+    ],
 
-flatpickr("#startDate",{
+    onDayCreate:function(dObj,dStr,fp,dayElem){
+      const d = dayElem.dateObj;
+      const date = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+      const holiday = holidays.find(h => h.holiday_date === date);
 
-dateFormat:"Y-m-d",
+      if(holiday){
+        dayElem.style.background="#fee2e2";
+        dayElem.style.color="#b91c1c";
+        dayElem.title = holiday.name;
+      }
+    }
+  });
 
-disable:[
-function(date){
-return date.getDay() === 0;
-}
-],
+  flatpickr("#endDate",{
+    dateFormat:"Y-m-d",
+    disable:[
+      function(date){
+        return date.getDay() === 0;
+      }
+    ],
 
-onDayCreate:function(dObj,dStr,fp,dayElem){
+    onDayCreate:function(dObj,dStr,fp,dayElem){
+      const d = dayElem.dateObj;
+      const date = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+      const holiday = holidays.find(h => h.holiday_date === date);
 
-const d = dayElem.dateObj;
-
-const date =
-d.getFullYear() + "-" +
-String(d.getMonth()+1).padStart(2,"0") + "-" +
-String(d.getDate()).padStart(2,"0");
-
-const holiday = holidays.find(h => h.holiday_date === date);
-
-if(holiday){
-
-dayElem.style.background="#fee2e2";
-dayElem.style.color="#b91c1c";
-
-dayElem.title = holiday.name;
-
-}
-
-}
-
-});
-
-flatpickr("#endDate",{
-
-dateFormat:"Y-m-d",
-
-disable:[
-function(date){
-return date.getDay() === 0;
-}
-],
-
-onDayCreate:function(dObj,dStr,fp,dayElem){
-
-const d = dayElem.dateObj;
-
-const date =
-d.getFullYear() + "-" +
-String(d.getMonth()+1).padStart(2,"0") + "-" +
-String(d.getDate()).padStart(2,"0");
-
-const holiday = holidays.find(h => h.holiday_date === date);
-
-if(holiday){
-
-dayElem.style.background="#fee2e2";
-dayElem.style.color="#b91c1c";
-
-dayElem.title = holiday.name;
-
+      if(holiday){
+        dayElem.style.background="#fee2e2";
+        dayElem.style.color="#b91c1c";
+        dayElem.title = holiday.name;
+      }
+    }
+  });
 }
 
-}
+    function initAllDatePickers(){
+      document.querySelectorAll(".date-input").forEach(input => {
+        /* destroy old instance */
+        if(input._flatpickr){
+          input._flatpickr.destroy();
+        }
 
-});
+        /* init flatpickr */
+        flatpickr(input,{
+          dateFormat:"Y-m-d",
+          disable:[
+            function(date){
+              return date.getDay() === 0;
+            }
+          ]
+        });
 
-}
+        /* icon click */
+        const icon = input.parentElement.querySelector(".calendar-icon");
+        if(icon){
+          icon.style.cursor = "pointer";
+          icon.onclick = () => {
+            input._flatpickr.open();
+          };
+        }
+      });
+    }
 
 async function initPage(){
 
 await loadHolidays();
 
+initAllDatePickers();
 initCalendar();
 loadPayslips()
 loadRequests();

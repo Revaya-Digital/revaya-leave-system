@@ -148,7 +148,7 @@ background:#16a34a;
 .input-field {
   width: auto !important;
   min-width: 200px;
-  max-width: 280px;
+  max-width: -webkit-fill-available;
   padding: 12px 14px;
   font-size: 14px;
 
@@ -606,7 +606,7 @@ border-bottom:1px solid #e5e7eb;
 .filters-bar .date-field {
   min-width: 0 !important;
   width: 100% !important;
-  max-width: 100% !important;
+  max-width: -webkit-fill-available;
 }
 
 .form-grid{
