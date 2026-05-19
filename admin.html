@@ -26,11 +26,9 @@
           <li data-page="dashboard" onclick="openPage('dashboard',this)">
             <i class="fa-solid fa-chart-line"></i> Dashboard
           </li>
-
           <li data-page="access" onclick="openPage('access',this)">
             <i class="fa-solid fa-user-shield"></i> Access Control
           </li>
-
           <li data-page="clients" onclick="openPage('clients',this)">
             <i class="fa-solid fa-handshake"></i> Clients
           </li>
@@ -989,12 +987,36 @@
       loadInvoices();
     }
 
+    function loadImageAsDataURL(url){
+      return new Promise((resolve,reject)=>{
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = ()=>{
+          const canvas = document.createElement("canvas");
+          canvas.width = img.width;
+          canvas.height = img.height;
+          canvas.getContext("2d").drawImage(img,0,0);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        img.onerror = reject;
+        img.src = url;
+      });
+    }
+
     async function generateInvoicePDF(invoiceId){
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
+      const watermarkUrl = "Revaya-LetterHead.png";
+      const watermarkData = await loadImageAsDataURL(watermarkUrl);
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const pageHeight = doc.internal.pageSize.getHeight();
+
+      doc.addImage(watermarkData, "PNG", 0, 0, pageWidth, pageHeight, undefined, "FAST");
+
       const { data: invoice } = await db
       .from("invoices")
-      .select(`*,
+      .select(`
+        *,
         clients(name,email,phone,address),
         projects(name)`)
       .eq("id",invoiceId)
@@ -1005,79 +1027,197 @@
       .select("*")
       .eq("invoice_id",invoiceId);
 
+      /* AFTER invoice_items FETCH */
+
+      const currencySymbols = {
+        PKR: "Rs",
+        USD: "$",
+        EUR: "€",
+        GBP: "£",
+        AED: "AED",
+        SAR: "SAR"
+      };
+
+      const currency = currencySymbols[invoice.currency] || invoice.currency || "Rs";
+
+      /* ========================= */
+      /* HEADER */
+      /* ========================= */
       doc.setFontSize(22);
-      doc.text("INVOICE", 14, 20);
+      doc.setFont("helvetica","bold");
+      doc.text("MONTHLY INVOICE", 70, 20);
       doc.setFontSize(11);
-      doc.text(`Invoice #: ${invoice.invoice_number}`,14,35);
-      doc.text(`Invoice Date: ${invoice.invoice_date}`, 14, 42);
-      doc.text(`Due Date: ${invoice.due_date || "-"}`, 14, 49);
-      doc.text(`Status: ${invoice.status}`, 14, 56);
-      doc.text(`Client: ${invoice.clients?.name || "-"}`, 120, 35);
-      doc.text(`Email: ${invoice.clients?.email || "-"}`, 120, 42);
-      doc.text(`Phone: ${invoice.clients?.phone || "-"}`, 120, 49);
-      doc.text(`Project: ${invoice.projects?.name || "-"}`, 120, 56);
 
-      let y = 75;
+      function drawLabelValue(label, value, x, y){
+        doc.setFont("helvetica","bold");
+        doc.text(label, x, y);
 
-      doc.setFontSize(12);
-      doc.text("Items",14,y);
-      y += 10;
-      
-      doc.setFontSize(10);
-      doc.text("Title",14,y);
-      doc.text("Qty",90,y);
-      doc.text("Price",120,y);
-      doc.text("Total",160,y);
+        const labelWidth = doc.getTextWidth(label);
 
-      y += 5;
+        doc.setFont("helvetica","normal");
+        doc.text(String(value || "-"), x + labelWidth + 3, y);
+      }
 
-      doc.line(14,y,190,y);
+      /* LEFT SIDE */
+      drawLabelValue("Invoice #:", invoice.invoice_number, 14, 35);
+      drawLabelValue("Invoice Date:", invoice.invoice_date, 14, 42);
+      drawLabelValue("Due Date:", invoice.due_date || "-", 14, 49);
+      drawLabelValue("Invoice Status:", invoice.status, 14, 56);
 
-      y += 10;
+      /* RIGHT SIDE */
+      drawLabelValue("Client:", invoice.clients?.name || "-", 120, 35);
+      drawLabelValue("Email:", invoice.clients?.email || "-", 120, 42);
+      drawLabelValue("Phone:", invoice.clients?.phone || "-", 120, 49);
+      drawLabelValue("Project:", invoice.projects?.name || "-", 120, 56);
+
+      /* ========================= */
+      /* TABLE COLUMN WIDTHS */
+      /* ========================= */
+
+      let y = 70;
+      const tableX = 10;
+      const titleWidth = 50;
+      const descWidth = 40;
+      const qtyWidth = 20;
+      const priceWidth = 35;
+      const totalWidth = 35;
+      const rowHeight = 10;
+
+      y += 2;
+
+      /* ========================= */
+      /* HEADER */
+      /* ========================= */
+
+      doc.setFont("helvetica","bold");
+
+      doc.rect(tableX, y - 6, titleWidth, rowHeight);
+      doc.rect(tableX + titleWidth, y - 6, descWidth, rowHeight);
+      doc.rect(tableX + titleWidth + descWidth, y - 6, qtyWidth, rowHeight);
+      doc.rect(tableX + titleWidth + descWidth + qtyWidth, y - 6, priceWidth, rowHeight);
+      doc.rect(tableX + titleWidth + descWidth + qtyWidth + priceWidth, y - 6, totalWidth, rowHeight);
+
+      doc.text("Title", tableX + 2, y);
+
+      doc.text("Description", tableX + titleWidth + 2, y);
+      doc.text("Qty", tableX + titleWidth + descWidth + qtyWidth - 2, y, { align:"right" });
+      doc.text("Price", tableX + titleWidth + descWidth + qtyWidth + priceWidth - 2, y, { align:"right" });
+      doc.text("Total", tableX + titleWidth + descWidth + qtyWidth + priceWidth + totalWidth - 2, y, { align:"right" });
+
+      doc.setFont("helvetica","normal");
+
+      y += rowHeight;
+
+      /* ========================= */
+      /* ITEMS */
+      /* ========================= */
 
       items.forEach(i=>{
-        doc.text(String(i.title), 14, y);
-        doc.text(String(i.quantity), 90, y);
-        doc.text(String(i.unit_price), 120, y);
-        doc.text(String(i.total_price), 160, y);
-        y += 10;
+        if(y > pageHeight - 70){
+          doc.addPage();
+          doc.addImage(watermarkData, "PNG", 0, 0, pageWidth, pageHeight, undefined, "FAST");
+          y = 20;
+        }
+
+        /* CELLS */
+        doc.rect(tableX, y - 6, titleWidth, rowHeight);
+        doc.rect(tableX + titleWidth, y - 6, descWidth, rowHeight);
+        doc.rect(tableX + titleWidth + descWidth, y - 6, qtyWidth, rowHeight);
+        doc.rect(tableX + titleWidth + descWidth + qtyWidth, y - 6, priceWidth, rowHeight);
+        doc.rect(tableX + titleWidth + descWidth + qtyWidth + priceWidth, y - 6, totalWidth, rowHeight);
+
+        /* VALUES */
+        doc.text(String(i.title || ""), tableX + 2, y);
+        doc.text(String(i.description || "-"), tableX + titleWidth + 2, y);
+        doc.text(String(i.quantity || ""), tableX + titleWidth + descWidth + qtyWidth - 2, y, { align:"right" });
+        doc.text(`${currency} ${Number(i.unit_price || 0).toFixed(2)}/-`, tableX + titleWidth + descWidth + qtyWidth + priceWidth - 2, y, { align:"right" });
+        doc.text(`${currency} ${Number(i.total_price || 0).toFixed(2)}/-`, tableX + titleWidth + descWidth + qtyWidth + priceWidth + totalWidth - 2, y, { align:"right" });
+        y += rowHeight;
       });
 
-      y += 10;
-
-      doc.line(110,y,190,y);
-
-      y += 10;
-
-      doc.text(`Subtotal: ${invoice.subtotal}`, 120, y);
-
-      y += 8;
-
-      doc.text(`Tax: ${invoice.tax_amount}`, 120, y );
-
-      y += 8;
-
-      doc.text(`Discount: ${invoice.discount_amount}`, 120, y);
-
-      y += 8;
-
-      doc.setFontSize(13);
-
-      doc.text(`Grand Total: ${invoice.total_amount}`, 120, y);
+      /* ========================= */
+      /* SUMMARY TABLE */
+      /* ========================= */
 
       y += 10;
 
-      doc.text(`Paid: ${invoice.paid_amount}`,120,y);
+      const summaryX = 120;
+      const labelWidth = 40;
+      const valueWidth = 30;
+      const summaryRowHeight = 10;
 
-      y += 8;
+      /* SUBTOTAL */
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Subtotal", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.subtotal || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+      y += summaryRowHeight;
 
-      doc.text(`Remaining: ${invoice.remaining_amount}`, 120, y);
-      doc.save(`${invoice.invoice_number}.pdf`);
+      /* TAX */
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Tax", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.tax_amount || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+      y += summaryRowHeight;
+
+      /* DISCOUNT */
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Discount", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.discount_amount || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+      y += summaryRowHeight;
+
+      /* GRAND TOTAL */
+      doc.setFont("helvetica","bold");
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Grand Total", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.total_amount || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+      y += summaryRowHeight;
+      doc.setFont("helvetica","normal");
+
+      /* PAID */
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Paid", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.paid_amount || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+      y += summaryRowHeight;
+
+      /* REMAINING */
+      doc.rect(summaryX, y, labelWidth, summaryRowHeight);
+      doc.rect(summaryX + labelWidth, y, valueWidth, summaryRowHeight);
+      doc.text("Remaining", summaryX + 3, y + 6);
+      doc.text(`${currency} ${Number(invoice.remaining_amount || 0).toFixed(2)}/-`, summaryX + labelWidth + valueWidth - 3, y + 6, { align:"right" });
+
+      /* ========================= */
+      /* SIGNATURE */
+      /* ========================= */
+
+      y += 20;
+      const signatureUrl = "Digital Signature.png";
+      const signatureData =
+      await loadImageAsDataURL(signatureUrl);
+
+      /* COMPANY TEXT */
+      doc.setFont("helvetica","normal");
+      doc.text("For Revaya Digital (Pvt) Ltd", 14, y);
+
+      /* SIGNATURE IMAGE */
+      doc.addImage(signatureData, "PNG", 14, y + 5, 65, 22);
+
+      /* NAME */
+      doc.setFont("helvetica","normal");
+      doc.text("Adam Kamani", 14, y + 32);
+
+      /* ========================= */
+      /* SAVE PDF */
+      /* ========================= */
+
+      doc.save(`${invoice.projects?.name}_${invoice.invoice_number}.pdf`);
     }
-    
+
     async function openClientModal(clientId=null){
       let client = null;
-
       if(clientId){
         const { data } = await db
         .from("clients")
