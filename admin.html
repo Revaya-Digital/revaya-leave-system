@@ -13,6 +13,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="supabase_client.js"></script>
     <script src="reports.js"></script>
+    <script src="analytics.js"></script>
   </head>
 
   <body>
@@ -3960,12 +3961,51 @@
     }
 
     async function renderDashboard(){
-      await loadAdminDashboard()
-      await loadUpcomingHolidays()
-      await loadTeamCalendar()
+      const html = `
+        <div class="dashboard-tabs">
+          <button class="dashboard-tab" onclick="switchDashboardTab('hr',this)">
+            HR Dashboard
+          </button>
+          <button class="dashboard-tab" onclick="switchDashboardTab('operations',this)">
+            Operations Dashboard
+          </button>
+          <button class="dashboard-tab" onclick="switchDashboardTab('financial',this)">
+            Financial Dashboard
+          </button>
+        </div>
+        <div id="hrDashboardSection"></div>
+        <div id="operationsDashboardSection" style="display:none"></div>
+        <div id="financialDashboardSection" style="display:none"></div>
+      `;
+
+      document.getElementById("pageContent").innerHTML = html;
+    }
+
+    function switchDashboardTab(tab, btn){
+      document.querySelectorAll(".dashboard-tab").forEach(t => {t.classList.remove("active");});
+      btn.classList.add("active");
+
+      document.getElementById("hrDashboardSection").style.display = "none";
+      document.getElementById("operationsDashboardSection").style.display = "none";
+      document.getElementById("financialDashboardSection").style.display = "none";
+
+      if(tab === "hr"){
+        document.getElementById("hrDashboardSection").style.display = "block";
+        loadAdminDashboard()
+      }
+
+      if(tab === "operations"){
+        document.getElementById("operationsDashboardSection").style.display = "block";
+        loadExecutiveAnalytics()
+      }
+
+      if(tab === "financial"){
+        document.getElementById("financialDashboardSection").style.display = "block";
+      }
     }
 
     async function loadAdminDashboard(){
+      showLoader("Loading analytics...");
       const { data: leaves } = await db
       .from("leave_requests")
       .select("*");
@@ -3974,13 +4014,6 @@
       let approved = leaves.filter(l => l.status === "approved").length;
       let rejected = leaves.filter(l => l.status === "rejected").length;
 
-      const { data: tasks } = await db
-      .from("tasks")
-      .select("status");
-
-      const pendingTasks = tasks.filter(t=>t.status==="pending").length;
-      const activeTasks = tasks.filter(t=>t.status==="in_progress").length;
-      const closedTasks = tasks.filter(t=>t.status==="closed").length;
       const html = `
       <div class="dashboard-grid">
         <div class="dash-card">
@@ -4017,23 +4050,14 @@
         <h3>Team Leave Calendar</h3>
         <div id="teamCalendar"></div>
       </div>
-      <div class="card">
-        <h3>Pending Tasks</h3>
-        <h1>${pendingTasks}</h1>
-      </div>
-      <div class="card">
-        <h3>Active Tasks</h3>
-        <h1>${activeTasks}</h1>
-      </div>
-      <div class="card">
-        <h3>Closed Tasks</h3>
-        <h1>${closedTasks}</h1>
-      </div>
       `;
 
-      document.getElementById("pageContent").innerHTML = html;
+      document.getElementById("hrDashboardSection").innerHTML = html;
       loadTodayLeaves();
       initAllDatePickers();
+      loadUpcomingHolidays();
+      loadTeamCalendar();
+      hideLoader();
     }
 
     async function loadTodayLeaves(){
@@ -4325,6 +4349,27 @@
       </div>
     </div>
 
+    <div id="employeeAnalyticsModal" class="modal">
+      <div class="modal-content" style="width:1200px; max-width:95%;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2 id="employeeAnalyticsTitle"> Employee Analytics </h2>
+          <button class="secondary-btn" onclick="closeEmployeeAnalytics()">
+            Close
+          </button>
+        </div>
+        <div id="employeeAnalyticsContent"> </div>
+      </div>
+    </div>
+    
+    <div id="projectAnalyticsModal" class="modal">
+      <div class="modal-content" style="width:1300px; max-width:96%;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2 id="projectAnalyticsTitle"> Project Analytics </h2>
+          <button class="secondary-btn" onclick="closeProjectAnalytics()"> Close </button>
+        </div>
+        <div id="projectAnalyticsContent"></div>
+      </div>
+    </div>
   </body>
 </html>
 
