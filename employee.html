@@ -311,7 +311,8 @@ data.forEach(proj=>{
           <td>
             ${t.deadline || "-"}
           </td>
-          <td style="display:flex;gap:8px;flex-wrap:wrap;">
+          <td>
+          ${t.status !== "review" && t.status !== "closed" ? `
             <button onclick="openTaskDetails('${t.id}')">
               View
             </button>
@@ -320,7 +321,7 @@ data.forEach(proj=>{
             </button>
             <button class="danger-btn" onclick="deleteEmployeeTask('${t.id}',this)">
               Delete
-            </button>
+            </button> ` : "-"}
           </td>
         </tr>
       `;

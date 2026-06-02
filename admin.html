@@ -1882,7 +1882,7 @@
                 <button onclick="closeTask('${t.id}')">
                   Mark Closed
                 </button>
-              ` : `
+              ` : t.status !== "closed" ? `
                 <button onclick="openTaskDetails('${t.id}')">
                   View
                 </button>
@@ -1892,7 +1892,7 @@
                 </button>
                 <button class="danger-btn" onclick="deleteTask('${t.id}',this)">
                   Delete
-                </button>`}
+                </button>` : "-"}
             </td>
           </tr>
         `;
