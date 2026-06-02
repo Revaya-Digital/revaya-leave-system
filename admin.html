@@ -2076,7 +2076,7 @@
         .insert({
           task_id:taskId,
           iteration_no:nextIteration,
-          status:"pending",
+          status:"working",
           created_by:empId,
           created_at:new Date().toISOString()});
 
@@ -2086,7 +2086,7 @@
           current_iteration_no:nextIteration,
           revision_count:
           nextIteration - 1,
-          status:"in_progress"})
+          status:"pending"})
         .eq("id",taskId);
 
         hideLoader();

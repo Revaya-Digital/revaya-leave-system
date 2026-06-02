@@ -688,7 +688,7 @@ async function requestRevision(iterationId, taskId){
     .insert({
       task_id:taskId,
       iteration_no:nextIteration,
-      status:"pending",
+      status:"working",
       created_by:empId,
       created_at:new Date().toISOString()});
 
