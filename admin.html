@@ -1867,12 +1867,20 @@
               </span>
             </td>
             <td>
+              <span class="badge ${t.approval_status === "approved" ? "badge-good" : t.approval_status === "pending" ? "badge-pending" : "badge-bad"}">
+                ${t.approval_status || "approved"}
+              </span>
+            </td>
+            <td>
               ${t.allotted_hours || 0} hrs
             </td>
             <td>
               ${t.deadline || "-"}
             </td>
             <td>
+              <button onclick="openTaskDetails('${t.id}')">
+                View
+              </button>
               <button onclick="openEditTaskModal('${t.id}')">
                 Edit
               </button>
@@ -1885,6 +1893,317 @@
       });
     }
 
+    async function openTaskDetails(taskId){
+      showLoader("Loading Task...");
+      const { data: task, error } = await db
+      .from("tasks")
+      .select(`
+        *,
+        projects(name),
+        assignee:employees!tasks_assigned_to_fkey(id, name),
+        assigner:employees!tasks_assigned_by_fkey(id, name),
+        task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name)),
+        task_comments(*, employee:employees(name))
+      `)
+      .eq("id",taskId)
+      .single();
+
+      hideLoader();
+      if(error){
+        showToast(error.message,"error");
+        return;
+      }
+
+      task.canApprove = await canApproveTask(task);
+      renderTaskDetailsModal(task);
+    }
+  
+    function renderTaskDetailsModal(task){
+      const iterations = [...(task.task_iterations || [])].sort((a,b)=>a.iteration_no - b.iteration_no);
+      const modal = document.createElement("div");
+      modal.className = "modal task-details-modal";
+      modal.style.display = "flex";
+      modal.innerHTML = `
+        <div class="modal-content" style="max-width:1000px;">
+          <h3> ${task.title} </h3>
+          <div class="form-grid">
+            <div>
+              <strong>Project</strong>
+              <div>${task.projects?.name || "-"}</div>
+            </div>
+            <div>
+              <strong>Assigned To</strong>
+              <div>${task.assignee?.name || "-"}</div>
+            </div>
+            <div>
+              <strong>Status</strong>
+              <div>${task.status}</div>
+            </div>
+            <div>
+              <strong>Revision Count</strong>
+              <div>${task.revision_count || 0}</div>
+            </div>
+          </div>
+          ${task.approval_status === "pending" ? `
+          <div class="card" style="margin-top:15px;margin-bottom:15px;">
+            <h4>Task Approval Required</h4>
+            <p> This task is currently awaiting approval. </p>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+              <button class="success-btn" onclick="approveTask('${task.id}')">
+                Approve Task
+              </button>
+              <button class="danger-btn" onclick="rejectTask('${task.id}')">
+                Reject Task
+              </button>
+            </div>
+          </div>` : ""}
+          <hr>
+          <h4>Discussion</h4>
+          <div style="max-height:250px;overflow:auto;margin-bottom:15px;">
+            ${(task.task_comments || []).sort((a,b)=>new Date(a.created_at) - new Date(b.created_at)).map(c=>`
+                <div class="card" style="margin-bottom:8px;">
+                  <strong> ${c.employee?.name || "Unknown"} </strong>
+                  <br>
+                  <small> ${new Date(c.created_at).toLocaleString()} </small>
+                  <p> ${c.comment} </p>
+                </div>`).join("")}
+          </div>
+          <button class="secondary-btn" onclick="addTaskComment('${task.id}')">
+            Add Comment
+          </button>
+          <hr>
+          <hr>
+          <h4>Iterations</h4>
+          <div id="taskIterationsList">
+            ${iterations.map(i=>`
+              <div class="card" style="margin-bottom:12px;">
+                <h4> Iteration #${i.iteration_no} </h4>
+                <p> Status: ${i.status} </p>
+                <p> Submitted: ${i.submitted_at ? new Date(i.submitted_at).toLocaleString() : "-"} </p>
+                <p> Reviewed: ${i.reviewed_at ? new Date(i.reviewed_at).toLocaleString() : "-"} </p>
+                <p> Reviewer: ${i.reviewer?.name || "-"} </p>
+                <p> Notes: ${i.review_notes || "-"} </p>
+                ${i.status === "submitted" ? `
+                <div style="margin-top:10px">
+                  <button onclick="approveIteration('${i.id}','${task.id}')">
+                    Approve
+                  </button>
+                  <button class="danger-btn" onclick="requestRevision('${i.id}','${task.id}')">
+                    Request Revision
+                  </button>
+                </div> ` : ""}
+              </div>`).join("")
+            }  
+          </div>
+          <div class="modal-actions">
+            <button class="secondary-btn" onclick="this.closest('.modal').remove()">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+
+  document.body.appendChild(modal);
+  }
+
+    async function approveIteration(iterationId, taskId){
+      const empId = await getEmployeeId();
+      showLoader("Approving...");
+      try{
+        await db
+        .from("task_iterations")
+        .update({
+          status:"approved",
+          reviewed_at:new Date().toISOString(),
+          reviewed_by:empId})
+        .eq("id",iterationId);
+
+        await db
+        .from("tasks")
+        .update({
+          status:"closed",
+          closed_at:new Date().toISOString()})
+        .eq("id",taskId);
+
+        hideLoader();
+        showToast("Task approved successfully", "success");
+        document.querySelector(".modal") ?.remove();
+        openTaskDetails(taskId);
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
+
+    async function requestRevision(iterationId, taskId){
+      const notes = prompt("Enter revision notes");
+
+      if(!notes){
+        return;
+      }
+
+      const empId = await getEmployeeId();
+      showLoader("Creating Revision...");
+
+      try{
+        const { data: task } =
+        await db
+        .from("tasks")
+        .select(`current_iteration_no`)
+        .eq("id",taskId)
+        .single();
+
+        const nextIteration = task.current_iteration_no + 1;
+
+        await db
+        .from("task_iterations")
+        .update({
+          status:"revision_requested",
+          review_notes:notes,
+          reviewed_by:empId,
+          reviewed_at:new Date()})
+        .eq("id",iterationId);
+
+        await db
+        .from("task_iterations")
+        .insert({
+          task_id:taskId,
+          iteration_no:nextIteration,
+          status:"working",
+          created_by:empId});
+
+        await db
+        .from("tasks")
+        .update({
+          current_iteration_no:nextIteration,
+          revision_count:
+          nextIteration - 1,
+          status:"in_progress"})
+        .eq("id",taskId);
+
+        hideLoader();
+        showToast("Revision requested", "success");
+        document.querySelector(".modal") ?.remove();
+        openTaskDetails(taskId);
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
+
+    async function canApproveTask(task){
+      const currentEmpId = await getEmployeeId();
+
+      const { data: currentEmployee } = await db
+      .from("employees")
+      .select("is_admin")
+      .eq("id",currentEmpId)
+      .single();
+
+      if(currentEmployee?.is_admin){
+        return true;
+      }
+
+      const { data: creator } = await db
+      .from("employees")
+      .select("manager_id")
+      .eq("id",task.assigned_by)
+      .single();
+
+      return creator?.manager_id === currentEmpId;
+    }
+
+    async function approveTask(taskId){
+      showLoader("Approving Task...");
+      try{
+        const empId = await getEmployeeId();
+        const { error } = await db
+        .from("tasks")
+        .update({
+          approval_status:"approved",
+          approved_by:empId,
+          approved_at:new Date().toISOString()
+        })
+        .eq("id",taskId);
+
+        if(error){
+          throw error;
+        }
+
+        hideLoader();
+        showToast("Task approved successfully", "success");
+        const modal = document.querySelector(".task-details-modal");
+        if(modal){
+          modal.remove();
+        }
+        loadTasks();
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
+
+
+    async function addTaskComment(taskId, iterationId = null){
+      const comment = prompt("Enter comment");
+      if(!comment){
+        return;
+      }
+
+      const empId = await getEmployeeId();
+      const { error } = await db
+      .from("task_comments")
+      .insert({
+        task_id: taskId,
+        iteration_id: iterationId,
+        employee_id: empId,
+        comment
+      });
+
+      if(error){
+        showToast(error.message, "error");
+        return;
+      }
+
+      showToast("Comment added", "success");
+      document.querySelector(".modal")?.remove();
+      openTaskDetails(taskId);
+    }
+    
+    async function rejectTask(taskId){
+      showLoader("Rejecting Task...");
+      try{
+        const empId = await getEmployeeId();
+        const { error } = await db
+        .from("tasks")
+        .update({
+          approval_status:"rejected",
+          approved_by:empId,
+          approved_at:new Date().toISOString()
+        })
+        .eq("id",taskId);
+
+        if(error){
+          throw error;
+        }
+
+        hideLoader();
+
+        showToast("Task rejected", "success");
+        const modal = document.querySelector(".task-details-modal");
+        if(modal){
+          modal.remove();
+        }
+        loadTasks();
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
 
     async function deleteTask(taskId,btn){
       const confirmDelete = confirm("Are you sure you want to permanently delete this task?");
@@ -2496,6 +2815,7 @@
                   <th>Assigned To</th>
                   <th>Assigned By</th>
                   <th>Status</th>
+                  <th>Approval</th>
                   <th>Allocated Hours</th>
                   <th>Deadline</th>
                   <th>Action</th>

@@ -262,6 +262,8 @@ CREATE TABLE public.tasks (
   deadline date,
   allotted_hours integer DEFAULT 0,
   created_at timestamp without time zone DEFAULT now(),
+  completed_at timestamp without time zone,
+  priority text DEFAULT 'medium'::text,
   CONSTRAINT tasks_pkey PRIMARY KEY (id),
   CONSTRAINT tasks_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.employees(id),

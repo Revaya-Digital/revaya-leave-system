@@ -148,6 +148,18 @@ function renderTeamTasksPage(){
             </div>
 
             <div class="form-field">
+              <label>Approval</label>
+              <div class="select-wrapper">
+                <select class="input-field select-field" id="taskApprovalFilter" onchange="loadTeamTasks()">
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-field">
               <label>Search</label>
               <input type="text" class="input-field" id="taskSearchFilter" placeholder="Search Task..." oninput="filterTable('taskSearchFilter', 'taskTable')">
             </div>
@@ -163,6 +175,7 @@ function renderTeamTasksPage(){
               <th>Project</th>
               <th>Assigned To</th>
               <th>Assigned By</th>
+              <th>Approval Status</th>
               <th>Status</th>
               <th>Allotted Hrs</th>
               <th>Deadline</th>
@@ -218,91 +231,504 @@ data.forEach(proj=>{
 });
 }
 
-async function loadTeamTasks(){
-  const selectedStatus = document.getElementById("taskStatusFilter").value;
-  const selectedEmployee = document.getElementById("taskEmployeeFilter").value;
-  const selectedProject = document.getElementById("taskProjectFilter").value;
-  const selectedDeadlineFrom = document.getElementById("taskFromDeadlineFilter").value;
-  const selectedDeadlineTo = document.getElementById("taskToDeadlineFilter").value;
+  async function loadTeamTasks(){
+    const selectedStatus = document.getElementById("taskStatusFilter").value;
+    const selectedEmployee = document.getElementById("taskEmployeeFilter").value;
+    const selectedProject = document.getElementById("taskProjectFilter").value;
+    const selectedDeadlineFrom = document.getElementById("taskFromDeadlineFilter").value;
+    const selectedDeadlineTo = document.getElementById("taskToDeadlineFilter").value;
+    const selectedApproval = document.getElementById("taskApprovalFilter").value;
 
-  let query = db
-  .from("tasks")
-  .select(`
-    *,
-    projects!tasks_project_id_fkey(name),
-    assignee:employees!tasks_assigned_to_fkey(name),
-    assigner:employees!tasks_assigned_by_fkey(name)
-  `)
-  .order("created_at",{ascending:false});
+    let query = db
+    .from("tasks")
+    .select(`
+      *,
+      projects!tasks_project_id_fkey(name),
+      assignee:employees!tasks_assigned_to_fkey(name),
+      assigner:employees!tasks_assigned_by_fkey(name)
+    `)
+    .order("created_at",{ascending:false});
 
-  if(selectedStatus !== "all"){
-  query = query.eq("status",selectedStatus);
+    if(selectedStatus !== "all"){
+      query = query.eq("status",selectedStatus);
+    }
+
+    if(selectedEmployee !== "all"){
+      query = query.eq("assigned_to",selectedEmployee);
+    }
+
+    if(selectedProject !== "all"){
+      query = query.eq("project_id",selectedProject);
+    }
+
+    if(selectedApproval !== "all"){
+      query = query.eq("approval_status",selectedApproval);
+    }
+      
+    if(selectedDeadlineFrom){
+    query = query.gte("deadline",selectedDeadlineFrom);
+    }
+
+    if(selectedDeadlineTo){
+    query = query.lte("deadline",selectedDeadlineTo);
+    }
+
+    const { data: tasks, error } = await query;
+
+    if(error){
+      showToast(error.message,"error");
+      return;
+    }
+
+    let rows = "";
+
+    tasks.forEach(t=>{
+      rows+=`
+        <tr>
+          <td>${t.title}</td>
+          <td>
+            ${t.projects?.name || "-"}
+          </td>
+          <td>
+            ${t.assignee?.name || "-"}
+          </td>
+          <td>
+            ${t.assigner?.name || "-"}
+          </td>
+          <td>
+            <span class="badge ${t.approval_status === "approved" ? "badge-good" : t.approval_status === "pending" ? "badge-pending" : "badge-bad"}">
+              ${t.approval_status}
+            </span>
+          </td>
+          <td>
+            <span class="badge ${t.status === "closed" || t.status === "submitted" ? "badge-good" : t.status === "in_progress" ? "badge-pending" : "badge-bad"}">
+              ${t.status}
+            </span>
+          </td>
+          <td>
+            ${t.allotted_hours || 0} hrs
+          </td>
+          <td>
+            ${t.deadline || "-"}
+          </td>
+          <td style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button onclick="openTaskDetails('${t.id}')">
+              View
+            </button>
+            <button onclick="openEmployeeEditTaskModal('${t.id}')">
+              Edit
+            </button>
+            <button class="danger-btn" onclick="deleteEmployeeTask('${t.id}',this)">
+              Delete
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    document.getElementById("teamTaskTable").innerHTML = rows;
   }
 
-  if(selectedEmployee !== "all"){
-  query = query.eq("assigned_to",selectedEmployee);
+  async function canApproveTask(task){
+    const currentEmpId = await getEmployeeId();
+    const { data: currentEmployee } = await db
+    .from("employees")
+    .select("is_admin")
+    .eq("id", currentEmpId)
+    .single();
+
+    if(currentEmployee?.is_admin){
+      return true;
+    }
+
+    const { data: creator } = await db
+    .from("employees")
+    .select("manager_id")
+    .eq("id", task.assigned_by)
+    .single();
+
+    return creator?.manager_id === currentEmpId;
   }
 
-  if(selectedProject !== "all"){
-  query = query.eq("project_id",selectedProject);
+
+  async function openTaskDetails(taskId){
+    showLoader("Loading Task...");
+    const { data: task, error } = await db
+    .from("tasks")
+    .select(`*,
+      projects(name),
+      assignee:employees!tasks_assigned_to_fkey(id, name),
+      assigner:employees!tasks_assigned_by_fkey(id, name),
+      task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name),
+      task_logs(duration)),
+      task_comments(*, employee:employees(name))`)
+    .eq("id",taskId)
+    .single();
+
+    hideLoader();
+    if(error){
+      showToast(error.message,"error");
+      return;
+    }
+
+    task.canApprove = await canApproveTask(task);
+    renderTaskDetailsModal(task);
   }
 
-  if(selectedDeadlineFrom){
-  query = query.gte("deadline",selectedDeadlineFrom);
+  function formatDuration(seconds){
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+
+    return `${hrs}h ${mins}m ${secs}s`;
   }
 
-  if(selectedDeadlineTo){
-  query = query.lte("deadline",selectedDeadlineTo);
+  function renderTaskDetailsModal(task){
+    const iterations = [...(task.task_iterations || [])].sort((a,b)=>a.iteration_no - b.iteration_no);
+    let totalTaskSeconds = 0;
+    iterations.forEach(i=>{
+      const iterationSeconds = (i.task_logs || []).reduce((sum,log)=>sum + Number(log.duration || 0), 0);
+      i.totalSeconds = iterationSeconds;
+      totalTaskSeconds += iterationSeconds;
+    });
+    const modal = document.createElement("div");
+    modal.className = "modal";
+    modal.style.display = "flex";
+    modal.innerHTML = `
+      <div class="modal-content" style="max-width:1000px;">
+        <h3> ${task.title} </h3>
+        <div class="form-grid">
+          <div>
+            <strong>Project</strong>
+            <div>${task.projects?.name || "-"}</div>
+          </div>
+          <div>
+            <strong>Assigned To</strong>
+            <div>${task.assignee?.name || "-"}</div>
+          </div>
+          <div>
+            <strong>Status</strong>
+            <div>${task.status}</div>
+          </div>
+          <div>
+            <strong>Approval</strong>
+            <div>${task.approval_status}</div>
+          </div>
+          <div>
+            <strong>Revision Count</strong>
+            <div>${task.revision_count || 0}</div>
+          </div>
+          <div>
+            <strong>Total Tracked</strong>
+            <div>
+              ${formatDuration(totalTaskSeconds)}
+            </div>
+          </div>
+        </div>
+        <hr>
+        <h4>Discussion</h4>
+        <div style="max-height:250px; overflow:auto; margin-bottom:15px;">
+          ${(task.task_comments || []).sort(
+            (a,b)=>
+            new Date(a.created_at) - new Date(b.created_at)).map(c=>`
+            <div class="card" style="margin-bottom:8px;">
+              <strong> ${c.employee?.name || "Unknown"} </strong>
+              <br>
+              <small> ${new Date(c.created_at).toLocaleString()} </small>
+              <p> ${c.comment} </p>
+            </div>`).join("")}
+        </div>
+        <button class="secondary-btn" onclick="addTaskComment('${task.id}')">
+          Add Comment
+        </button>
+        <hr>
+        ${task.approval_status === "pending" && task.canApprove
+        ? `
+        <div style="margin-bottom:20px; padding:15px; border:1px solid #ddd; border-radius:8px;">
+          <h4> Task Approval Required </h4>
+
+          <button class="success-btn" onclick="approveTask('${task.id}')">
+            Approve Task
+          </button>
+
+          <button class="danger-btn" onclick="rejectTask('${task.id}')">
+            Reject Task
+          </button>
+        </div>
+        `
+        : task.approval_status === "pending"
+        ? `
+        <div style="margin-bottom:20px; padding:15px; border:1px solid #ddd; border-radius:8px;">
+          <strong>Waiting for Manager Approval</strong>
+        </div>
+        ` : ""}
+        <h4>Iterations</h4>
+        <div id="taskIterationsList">
+          ${iterations.map(i=>`
+            <div class="card" style="margin-bottom:12px;">
+              <h4> Iteration #${i.iteration_no} </h4>
+              <p> Status: ${i.status} </p>
+              <p> Submitted: ${i.submitted_at ? new Date(i.submitted_at).toLocaleString() : "-"} </p>
+              <p> Reviewed: ${i.reviewed_at ? new Date(i.reviewed_at).toLocaleString() : "-"} </p>
+              <p> Reviewer: ${i.reviewer?.name || "-"} </p>
+              <p> Notes: ${i.review_notes || "-"} </p>
+              <p> Hours: ${formatDuration(i.totalSeconds)} </p>
+              ${i.status === "submitted" ? `
+              <div style="margin-top:10px">
+                <button onclick="approveIteration('${i.id}','${task.id}')">
+                  Approve
+                </button>
+                <button class="danger-btn" onclick="requestRevision('${i.id}','${task.id}')">
+                  Request Revision
+                </button>
+              </div> ` : ""}
+            </div>`).join("")
+          }  
+        </div>
+        <div class="modal-actions">
+          <button class="secondary-btn" onclick="this.closest('.modal').remove()">
+            Close
+          </button>
+        </div>
+      </div>
+    `;
+
+document.body.appendChild(modal);
+}
+
+  async function approveTask(taskId){
+    try{
+      showLoader("Approving Task...");
+      const empId = await getEmployeeId();
+
+      const { data: task } = await db
+      .from("tasks")
+      .select("id,assigned_by")
+      .eq("id",taskId)
+      .single();
+
+      const allowed = await canApproveTask(task);
+
+      if(!allowed){
+        showToast("You are not authorized to approve this task", "error");
+        return;
+      }
+
+      const { error } = await db
+      .from("tasks")
+      .update({
+        approval_status:"approved",
+        approved_by:empId,
+        approved_at:new Date().toISOString()})
+      .eq("id",taskId);
+
+      hideLoader();
+
+      if(error){
+        showToast(error.message, "error");
+        return;
+      }
+
+      showToast("Task Approved", "success");
+      document.querySelector(".modal")?.remove();
+      openTaskDetails(taskId);
+    }
+    catch(err){
+      hideLoader();
+      showToast(err.message, "error");
+    }
   }
 
-  const { data: tasks, error } = await query;
+  async function rejectTask(taskId){
+    try{
+      showLoader("Rejecting Task...");
 
-  if(error){
-    showToast(error.message,"error");
+      const { data: task } = await db
+      .from("tasks")
+      .select("id,assigned_by")
+      .eq("id",taskId)
+      .single();
+
+      const allowed = await canApproveTask(task);
+      
+      if(!allowed){
+        showToast("You are not authorized to reject this task", "error");
+        return;
+      }
+
+      const { error } = await db
+      .from("tasks")
+      .update({approval_status:"rejected"})
+      .eq("id",taskId);
+
+      hideLoader();
+
+      if(error){
+        showToast(error.message, "error");
+        return;
+      }
+
+      showToast("Task Rejected", "success");
+
+      document.querySelector(".modal")?.remove();
+
+      openTaskDetails(taskId);
+    }
+    catch(err){
+      hideLoader();
+      showToast(err.message, "error");
+    }
+  }
+
+async function approveIteration(iterationId, taskId){
+  const empId = await getEmployeeId();
+  showLoader("Approving...");
+  try{
+    await db
+    .from("task_iterations")
+    .update({
+      status:"approved",
+      reviewed_at:new Date().toISOString(),
+      reviewed_by:empId})
+    .eq("id",iterationId);
+
+    await db
+    .from("tasks")
+    .update({
+      status:"closed",
+      closed_at:new Date().toISOString()})
+    .eq("id",taskId);
+
+    await db
+    .from("task_comments")
+    .insert({
+      task_id: taskId,
+      iteration_id: iterationId,
+      employee_id: empId,
+      comment: "Iteration approved"
+    });
+
+    hideLoader();
+    showToast("Task approved successfully", "success");
+    document.querySelector(".modal") ?.remove();
+    openTaskDetails(taskId);
+  }
+  catch(err){
+    hideLoader();
+    showToast(err.message, "error");
+  }
+}
+
+async function addTaskComment(taskId, iterationId = null){
+  const comment = prompt("Enter comment");
+  if(!comment){
     return;
   }
 
-  let rows = "";
-
-  tasks.forEach(t=>{
-    rows+=`
-      <tr>
-        <td>${t.title}</td>
-        <td>
-          ${t.projects?.name || "-"}
-        </td>
-        <td>
-          ${t.assignee?.name || "-"}
-        </td>
-        <td>
-          ${t.assigner?.name || "-"}
-        </td>
-        <td>
-          <span class="badge ${t.status === "closed" || t.status === "submitted" ? "badge-good" : t.status === "in_progress" ? "badge-pending" : "badge-bad"}">
-            ${t.status}
-          </span>
-        </td>
-        <td>
-          ${t.allotted_hours || 0} hrs
-        </td>
-        <td>
-          ${t.deadline || "-"}
-        </td>
-        <td style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button onclick="openEmployeeEditTaskModal('${t.id}')">
-            Edit
-          </button>
-          <button class="danger-btn" onclick="deleteEmployeeTask('${t.id}',this)">
-            Delete
-          </button>
-        </td>
-      </tr>
-    `;
+  const empId = await getEmployeeId();
+  const { error } = await db
+  .from("task_comments")
+  .insert({
+    task_id: taskId,
+    iteration_id: iterationId,
+    employee_id: empId,
+    comment
   });
 
-  document.getElementById("teamTaskTable").innerHTML = rows;
+  if(error){
+    showToast(error.message, "error");
+    return;
+  }
+
+  showToast("Comment added", "success");
+  document.querySelector(".modal")?.remove();
+  openTaskDetails(taskId);
 }
 
+async function requestRevision(iterationId, taskId){
+  const notes = prompt("Enter revision notes");
+
+  if(!notes){
+    return;
+  }
+
+  const empId = await getEmployeeId();
+  showLoader("Creating Revision...");
+
+  try{
+    const { data: task } = await db
+    .from("tasks")
+    .select(`current_iteration_no`)
+    .eq("id",taskId)
+    .single();
+
+    const nextIteration = task.current_iteration_no + 1;
+
+    await db
+    .from("task_iterations")
+    .update({
+      status:"revision_requested",
+      review_notes:notes,
+      reviewed_by:empId,
+      reviewed_at:new Date()})
+    .eq("id",iterationId);
+
+    await db
+    .from("task_comments")
+    .insert({
+      task_id: taskId,
+      iteration_id: iterationId,
+      employee_id: empId,
+      comment: notes});
+
+    await db
+    .from("task_iterations")
+    .insert({
+      task_id:taskId,
+      iteration_no:nextIteration,
+      status:"working",
+      created_by:empId});
+
+    await db
+    .from("tasks")
+    .update({
+      current_iteration_no:nextIteration,
+      revision_count:
+      nextIteration - 1,
+      status:"in_progress"})
+    .eq("id",taskId);
+
+    hideLoader();
+    showToast("Revision requested", "success");
+    document.querySelector(".modal") ?.remove();
+    openTaskDetails(taskId);
+  }
+  catch(err){
+    hideLoader();
+    showToast(err.message, "error");
+  }
+}
+
+async function canReviewTask(taskId){
+  const currentEmpId = await getEmployeeId();
+  const { data: currentEmployee } = await db
+  .from("employees")
+  .select("id,is_admin")
+  .eq("id",currentEmpId)
+  .single();
+
+  if(currentEmployee?.is_admin){
+    return true;
+  }
+
+  const { data: task } = await db
+  .from("tasks")
+  .select("assigned_by")
+  .eq("id",taskId)
+  .single();
+
+  return (task?.assigned_by === currentEmpId);
+}
 
 async function deleteEmployeeTask(taskId,btn){
   const confirmDelete = confirm("Are you sure you want to permanently delete this task?");
@@ -469,25 +895,7 @@ async function openEmployeeEditTaskModal(taskId){
 
         <div class="form-field">
           <label>Status</label>
-          <div class="select-wrapper">
-            <select id="employeeEditTaskStatus" class="input-field select-field">
-              <option value="pending" ${task.status==="pending"?"selected":""}>
-                Pending
-              </option>
-              <option value="in_progress" ${task.status==="in_progress"?"selected":""}>
-                In Progress
-              </option>
-              <option value="review" ${task.status==="review"?"selected":""}>
-                Review
-              </option>
-              <option value="submitted" ${task.status==="submitted"?"selected":""}>
-                Submitted
-              </option>
-              <option value="closed" ${task.status==="closed"?"selected":""}>
-                Closed
-              </option>
-            </select>
-          </div>
+          <input class="input-field" value="${task.status}" disabled>
         </div>
       </div>
 
@@ -547,7 +955,6 @@ async function updateEmployeeTask(taskId,btn){
       assigned_to:document.getElementById("employeeEditTaskAssign").value,
       allotted_hours:Number(document.getElementById("employeeEditTaskHours").value),
       deadline:document.getElementById("employeeEditTaskDeadline").value,
-      status:document.getElementById("employeeEditTaskStatus").value,
       description:document.getElementById("employeeEditTaskDesc").value
     };
 
@@ -657,15 +1064,19 @@ async function openEmployeeTaskModal(){
 
 async function createEmployeeTask(btn){
   const empId = await getEmployeeId();
+  const assignedTo = document.getElementById("empTaskAssign").value;
   const payload = {
     project_id:document.getElementById("empTaskProject").value,
-    assigned_to:document.getElementById("empTaskAssign").value,
+    assigned_to:assignedTo,
     title:document.getElementById("empTaskTitle").value,
     description:document.getElementById("empTaskDesc").value,
     deadline:document.getElementById("empTaskDeadline").value,
     allotted_hours:Number(document.getElementById("empTaskHours").value),
     assigned_by:empId,
-    status:"pending"
+    status:"pending",
+    approval_status: (assignedTo === empId) ? "pending" : "approved",
+    approved_by: (assignedTo === empId) ? null : empId,
+    approved_at: (assignedTo === empId) ? null : new Date().toISOString()
   };
 
   const { error } = await db
@@ -857,34 +1268,26 @@ async function loadMyTasks(){
         <td>${t.allotted_hours || 0}h</td>
         <td>${tracked}</td>
         <td>
-          ${
-            t.status === "pending"
-            ? `
-              <button onclick="startTask('${t.id}')">
+          ${t.status === "pending" && t.approval_status === "approved" 
+            ? `<button onclick="startTask('${t.id}')">
                 Start
-              </button>
-            `
-            : ""
-          }
-          ${
-            t.status === "in_progress"
-            ? `
-              <button class="danger-btn" onclick="stopTask('${t.id}')">
+              </button>` : ""}
+          ${t.status === "in_progress" && t.approval_status === "approved" 
+            ? `<button class="danger-btn" onclick="stopTask('${t.id}')">
                 Stop
-              </button>
-            `
-            : ""
-          }
-          ${
-            t.status !== "submitted"
-            ? `
-              <button class="success-btn"
-                onclick="completeTask('${t.id}')">
-                Complete
-              </button>
-            `
-            : ""
-          }
+              </button> ` : ""}
+          ${t.status !== "submitted" && t.approval_status === "approved"
+            ? `<button class="success-btn" onclick="submitIteration('${t.id}')">
+                Submit
+              </button>` : ""}
+          ${t.approval_status === "pending"
+            ? `<span class="badge warning">
+                Waiting Approval
+              </span>` : ""}
+          ${t.approval_status === "rejected"
+          ? `<span class="badge danger">
+                Rejected
+              </span>` : ""}
         </td>
       </tr>
     `;
@@ -893,7 +1296,21 @@ async function loadMyTasks(){
 }
 
 async function startTask(taskId){
+  const { data: task } = await db
+  .from("tasks")
+  .select(`approval_status,
+    current_iteration_no,
+    task_iterations(id, iteration_no)`)
+  .eq("id", taskId)
+  .single();
+
+  if(task.approval_status !== "approved"){
+    showToast("Task approval required", "error");
+    return;
+  }
+
   const empId = await getEmployeeId();
+  
   const { data:active } = await db
   .from("task_logs")
   .select("id")
@@ -905,16 +1322,17 @@ async function startTask(taskId){
     return;
   }
 
+  const currentIteration =task.task_iterations.find(i=>i.iteration_no === task.current_iteration_no);
+
   await db.from("task_logs").insert({
     task_id: taskId,
+    iteration_id: currentIteration.id,
     employee_id: empId,
     start_time: new Date().toISOString()
   });
 
   await db.from("tasks")
-  .update({
-    status:"in_progress"
-  })
+  .update({status:"in_progress"})
   .eq("id", taskId);
 
   showToast("Task started","success");
@@ -946,33 +1364,65 @@ async function stopTask(taskId){
   .eq("id", log.id);
 
   await db.from("tasks")
-  .update({
-    status:"pending"
-  })
+  .update({status:"pending"})
   .eq("id", taskId);
 
   showToast("Task stopped","success");
   loadMyTasks();
 }
 
-async function completeTask(taskId){
+async function submitIteration(taskId){
+  const { data: task } = await db
+  .from("tasks")
+  .select(`
+    current_iteration_no,
+    approval_status,
+    task_iterations(id, iteration_no)
+  `)
+  .eq("id",taskId)
+  .single();
+
+  if(task.approval_status !== "approved"){
+    showToast("Task approval required", "error");
+    return;
+  }
+
   const empId = await getEmployeeId();
 
-  await db.from("task_logs")
+  const currentIteration =
+  task.task_iterations.find(
+    i=>i.iteration_no === task.current_iteration_no
+  );
+
+  await db
+  .from("task_logs")
   .update({
     end_time:new Date().toISOString()
   })
-  .eq("task_id", taskId)
-  .eq("employee_id", empId)
-  .is("end_time", null);
+  .eq("task_id",taskId)
+  .eq("employee_id",empId)
+  .is("end_time",null);
 
-  await db.from("tasks")
+  await db
+  .from("task_iterations")
+  .update({
+    status:"submitted",
+    submitted_at:new Date().toISOString()
+  })
+  .eq("id",currentIteration.id);
+
+  await db
+  .from("tasks")
   .update({
     status:"submitted"
   })
-  .eq("id", taskId);
+  .eq("id",taskId);
 
-  showToast("Task submitted","success");
+  showToast(
+    "Iteration submitted for review",
+    "success"
+  );
+
   loadMyTasks();
 }
 
