@@ -595,8 +595,9 @@ async function approveIteration(iterationId, taskId){
     await db
     .from("tasks")
     .update({
-      status:"closed",
-      closed_at:new Date().toISOString()})
+      status:"review",
+      reviewed_at:new Date().toISOString(),
+      reviewed_by:empId})
     .eq("id",taskId);
 
     await db
@@ -670,7 +671,7 @@ async function requestRevision(iterationId, taskId){
       status:"revision_requested",
       review_notes:notes,
       reviewed_by:empId,
-      reviewed_at:new Date()})
+      reviewed_at:new Date().toISOString()})
     .eq("id",iterationId);
 
     await db
@@ -686,8 +687,9 @@ async function requestRevision(iterationId, taskId){
     .insert({
       task_id:taskId,
       iteration_no:nextIteration,
-      status:"working",
-      created_by:empId});
+      status:"pending",
+      created_by:empId,
+      created_at:new Date().toISOString()});
 
     await db
     .from("tasks")
@@ -695,7 +697,7 @@ async function requestRevision(iterationId, taskId){
       current_iteration_no:nextIteration,
       revision_count:
       nextIteration - 1,
-      status:"in_progress"})
+      status:"pending"})
     .eq("id",taskId);
 
     hideLoader();
@@ -1389,10 +1391,7 @@ async function submitIteration(taskId){
 
   const empId = await getEmployeeId();
 
-  const currentIteration =
-  task.task_iterations.find(
-    i=>i.iteration_no === task.current_iteration_no
-  );
+  const currentIteration = task.task_iterations.find(i=>i.iteration_no === task.current_iteration_no);
 
   await db
   .from("task_logs")
@@ -1418,11 +1417,7 @@ async function submitIteration(taskId){
   })
   .eq("id",taskId);
 
-  showToast(
-    "Iteration submitted for review",
-    "success"
-  );
-
+  showToast("Iteration submitted for review", "success");
   loadMyTasks();
 }
 

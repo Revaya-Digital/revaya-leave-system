@@ -1878,15 +1878,21 @@
               ${t.deadline || "-"}
             </td>
             <td>
-              <button onclick="openTaskDetails('${t.id}')">
-                View
-              </button>
-              <button onclick="openEditTaskModal('${t.id}')">
-                Edit
-              </button>
-              <button class="danger-btn" onclick="deleteTask('${t.id}',this)">
-                Delete
-              </button>
+              ${t.status === "review" ? `
+                <button onclick="closeTask('${t.id}')">
+                  Mark Closed
+                </button>
+              ` : `
+                <button onclick="openTaskDetails('${t.id}')">
+                  View
+                </button>
+                </button>
+                <button onclick="openEditTaskModal('${t.id}')">
+                  Edit
+                </button>
+                <button class="danger-btn" onclick="deleteTask('${t.id}',this)">
+                  Delete
+                </button>`}
             </td>
           </tr>
         `;
@@ -2002,9 +2008,8 @@
           </div>
         </div>
       `;
-
-  document.body.appendChild(modal);
-  }
+      document.body.appendChild(modal);
+    }
 
     async function approveIteration(iterationId, taskId){
       const empId = await getEmployeeId();
@@ -2021,8 +2026,9 @@
         await db
         .from("tasks")
         .update({
-          status:"closed",
-          closed_at:new Date().toISOString()})
+          status:"review",
+          reviewed_at:new Date().toISOString(),
+          reviewed_by:empId})
         .eq("id",taskId);
 
         hideLoader();
@@ -2062,7 +2068,7 @@
           status:"revision_requested",
           review_notes:notes,
           reviewed_by:empId,
-          reviewed_at:new Date()})
+          reviewed_at:new Date().toISOString()})
         .eq("id",iterationId);
 
         await db
@@ -2070,8 +2076,9 @@
         .insert({
           task_id:taskId,
           iteration_no:nextIteration,
-          status:"working",
-          created_by:empId});
+          status:"pending",
+          created_by:empId,
+          created_at:new Date().toISOString()});
 
         await db
         .from("tasks")
@@ -2146,6 +2153,15 @@
       }
     }
 
+    async function closeTask(taskId){
+      await db
+      .from("tasks")
+      .update({
+        status:"closed",
+        closed_at:new Date().toISOString()
+      })
+      .eq("id",taskId);
+    }
 
     async function addTaskComment(taskId, iterationId = null){
       const comment = prompt("Enter comment");
@@ -2172,7 +2188,7 @@
       document.querySelector(".modal")?.remove();
       openTaskDetails(taskId);
     }
-    
+
     async function rejectTask(taskId){
       showLoader("Rejecting Task...");
       try{
