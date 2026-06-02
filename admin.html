@@ -2154,6 +2154,8 @@
     }
 
     async function closeTask(taskId){
+      showLoader("Closing Task...");
+      try{
       await db
       .from("tasks")
       .update({
@@ -2161,6 +2163,16 @@
         closed_at:new Date().toISOString()
       })
       .eq("id",taskId);
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+      finally{
+        hideLoader();
+        showToast("Task closed successfully", "success");
+        loadTasks();
+      }
     }
 
     async function addTaskComment(taskId, iterationId = null){
