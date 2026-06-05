@@ -1252,6 +1252,33 @@ async function loadMyTasks(){
     const mins = Math.floor((totalMinutes % 3600) / 60);
     const secs = totalMinutes % 60;
     const tracked = `${hours}h ${mins}m ${secs}s`;
+    let actionHtml = "";
+    if (t.approval_status === "pending") {
+      actionHtml = `<span class="badge warning"> Waiting Approval </span>`;
+    }
+    else if (t.approval_status === "rejected") {
+      actionHtml = `
+        <span class="badge danger"> Rejected </span>`;
+    }
+    else if (t.approval_status === "approved") {
+      switch (t.status) {
+        case "pending":
+          actionHtml = `<button onclick="startTask('${t.id}')"> Start </button>`;
+          break;
+        case "in_progress":
+          actionHtml = `
+            <button class="danger-btn" onclick="stopTask('${t.id}')"> Stop </button>
+            <button class="success-btn" onclick="submitIteration('${t.id}')"> Submit </button>`;
+          break;
+        case "submitted":
+          actionHtml = `<span class="badge warning"> Task in Internal Review </span>`;
+        case "review":
+          actionHtml = `<span class="badge warning"> Task in Client Review </span>`;
+        case "closed":
+          actionHtml = `<span class="badge warning"> Task in Closed </span>`;
+          break;
+      }
+    }
     rows += `
       <tr>
         <td>${t.title}</td>
@@ -1267,31 +1294,10 @@ async function loadMyTasks(){
             ${t.status}
           </span>
         </td>
-        <td>${t.deadline || "-"}</td>
-        <td>${t.allotted_hours || 0}h</td>
-        <td>${tracked}</td>
-        <td>
-          ${t.status === "pending" && t.approval_status === "approved" 
-            ? `<button onclick="startTask('${t.id}')">
-                Start
-              </button>` : ""}
-          ${t.status === "in_progress" && t.approval_status === "approved" 
-            ? `<button class="danger-btn" onclick="stopTask('${t.id}')">
-                Stop
-              </button> ` : ""}
-          ${t.status !== "submitted" && t.approval_status === "approved"
-            ? `<button class="success-btn" onclick="submitIteration('${t.id}')">
-                Submit
-              </button>` : ""}
-          ${t.approval_status === "pending"
-            ? `<span class="badge warning">
-                Waiting Approval
-              </span>` : ""}
-          ${t.approval_status === "rejected"
-          ? `<span class="badge danger">
-                Rejected
-              </span>` : ""}
-        </td>
+        <td> ${t.deadline || "-"} </td>
+        <td> ${t.allotted_hours || 0}hrs </td>
+        <td> ${tracked} </td>
+        <td> ${actionHtml} </td>
       </tr>
     `;
   });
