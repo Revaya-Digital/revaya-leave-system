@@ -739,6 +739,15 @@ const analyticsFilters = {
         document.getElementById("employeeAnalyticsContent").innerHTML = html;
 
         renderEmployeeTaskChart(closedTasks, openTasks, overdueTasks);
+
+        // console.log("Logs Count", logs.length);
+        // console.table(logs.map(x => ({created_at: x.created_at, duration: x.duration})));
+        
+        // const uniqueDays = [...new Set(logs.map(x => x.created_at?.split("T")[0]))];
+
+        // console.log(uniqueDays.length);
+        // console.log(uniqueDays);
+
         renderEmployeeTimeline(logs);
         renderEmployeeTasks(tasks);
 
@@ -779,22 +788,24 @@ const analyticsFilters = {
             const day = log.created_at.split("T")[0];
 
             if(!daily[day]){
-            daily[day] = 0;
+                daily[day] = 0;
             }
 
             daily[day] += (Number(log.duration || 0) / 3600);
         });
+
+        const sortedDays = Object.keys(daily).sort((a,b) => new Date(a) - new Date(b));
 
         new Chart(document.getElementById("employeeTimelineChart"),
             {
             type:"line",
 
             data:{
-                labels:Object.keys(daily),
+                labels:sortedDays,
 
                 datasets:[{
                 label:"Tracked Hours",
-                data:Object.values(daily),
+                data:sortedDays.map(day => daily[day]),
                 tension:0.3
                 }]
             }
