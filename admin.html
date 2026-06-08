@@ -1924,7 +1924,8 @@
       renderTaskDetailsModal(task);
     }
   
-    function renderTaskDetailsModal(task){
+    async function renderTaskDetailsModal(task){
+      const empId = await getEmployeeId();
       const iterations = [...(task.task_iterations || [])].sort((a,b)=>a.iteration_no - b.iteration_no);
       const modal = document.createElement("div");
       modal.className = "modal task-details-modal";
@@ -1989,7 +1990,7 @@
                 <p> Reviewed: ${i.reviewed_at ? new Date(i.reviewed_at).toLocaleString() : "-"} </p>
                 <p> Reviewer: ${i.reviewer?.name || "-"} </p>
                 <p> Notes: ${i.review_notes || "-"} </p>
-                ${i.status === "submitted" ? `
+                ${i.status === "submitted" && task.assigned_to != empId ? `
                 <div style="margin-top:10px">
                   <button onclick="approveIteration('${i.id}','${task.id}')">
                     Approve

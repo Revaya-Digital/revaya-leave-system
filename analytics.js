@@ -116,6 +116,16 @@ const analyticsFilters = {
         const closedTasks = filteredTasks.filter(t => t.status?.toLowerCase() === "closed").length;
         const overdueTasks = filteredTasks.filter(t => {if(!t.deadline || t.status?.toLowerCase() === "closed"){return false;} return new Date(t.deadline) < new Date();}).length;
         const dueToday = filteredTasks.filter(t => {if(!t.deadline) return false; const today = new Date().toISOString().split("T")[0]; return t.deadline === today;}).length;
+
+        const closedTasksData = filteredTasks.filter(t => t.status?.toLowerCase() === "closed");
+        const totalIterations = closedTasksData.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const totalRevisions = closedTasksData.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
+        const firstPassTasks = closedTasksData.filter(t => Number(t.revision_count || 0) === 0).length;
+        const avgIterations = closedTasksData.length > 0 ? (totalIterations / closedTasksData.length).toFixed(2) : 0;
+        const firstPassRate = closedTasksData.length > 0 ? Math.round((firstPassTasks / closedTasksData.length) * 100) : 0;
+        const revisionRate = closedTasksData.length > 0 ? Math.round((closedTasksData.filter(t => Number(t.revision_count || 0) > 0).length / closedTasksData.length) * 100) : 0;
+        const avgRevisions = closedTasksData.length > 0 ? (totalRevisions / closedTasksData.length).toFixed(2) : 0;
+                
         const html = `
             <div class="card">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
@@ -182,6 +192,27 @@ const analyticsFilters = {
                     <h2>${employees.length}</h2>
                 </div>
             </div>
+            <div class="dashboard-cards">
+                <div class="dash-card">
+                    <span>Avg Iterations</span>
+                    <h2>${avgIterations}</h2>
+                </div>
+
+                <div class="dash-card">
+                    <span>First Pass Rate</span>
+                    <h2>${firstPassRate}%</h2>
+                </div>
+
+                <div class="dash-card">
+                    <span>Revision Rate</span>
+                    <h2>${revisionRate}%</h2>
+                </div>
+
+                <div class="dash-card">
+                    <span>Avg Revisions</span>
+                    <h2>${avgRevisions}</h2>
+                </div>
+            </div>
             <div class="chart-grid">
                 <div class="chart-box">
                     <canvas id="taskStatusChart"></canvas>
@@ -191,6 +222,20 @@ const analyticsFilters = {
                 </div>
                 <div class="chart-box">
                     <canvas id="departmentChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-grid"> 
+                <div class="card">
+                    <h3>Iteration Distribution</h3>
+                    <div class="chart-box">
+                        <canvas id="iterationDistributionChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Revision Distribution</h3>
+                    <div class="chart-box">
+                        <canvas id="revisionDistributionChart"></canvas>
+                    </div>
                 </div>
             </div>
             <div class="card">
@@ -276,6 +321,43 @@ const analyticsFilters = {
                     </div>
                 </div>
             </div>
+            <div class="chart-grid">
+                <div class="card">
+                    <h3>Most Revised Tasks</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Task</th>
+                                    <th>Project</th>
+                                    <th>Iterations</th>
+                                    <th>Revisions</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="mostRevisedTasksBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Most Revised Employees</h3>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Employee</th>
+                                    <th>Closed Tasks</th>
+                                    <th>Avg Iterations</th>
+                                    <th>Revision Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody id="mostRevisedEmployeesBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
             <div class="card">
                 <h3> Smart Insights </h3>
                 <div id="smartInsightsContainer"></div>
@@ -295,9 +377,13 @@ const analyticsFilters = {
         renderResourceIntelligence(filteredTasks, employees, projects, taskLogs);
         renderUpcomingDeadlines(filteredTasks, employees);
         renderTopPerformers(filteredTasks, employees, taskLogs);
+        renderMostRevisedTasks(filteredTasks, projects);
+        renderMostRevisedEmployees(filteredTasks, employees);
         renderUtilizationChart(filteredTasks, employees, taskLogs);
         generateSmartInsights(filteredTasks, employees);
         renderDepartmentChart(filteredTasks, employees);
+        renderIterationDistributionChart(filteredTasks);
+        renderRevisionDistributionChart(filteredTasks)
         hideLoader();
     }
 
@@ -682,56 +768,80 @@ const analyticsFilters = {
         logs.forEach(log => {trackedHours += Number(log.duration || 0);});
 
         const efficiency = tasks.length > 0 ? Math.round((closedTasks.length / tasks.length) * 100) : 0;
+        const totalIterations = closedTasks.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const firstPassTasks = closedTasks.filter(t => Number(t.revision_count || 0) === 0).length;
+        const totalRevisions = closedTasks.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
+        const avgIterations = closedTasks.length > 0 ? (totalIterations / closedTasks.length).toFixed(2) : 0;
+        const firstPassRate = closedTasks.length > 0 ? Math.round((firstPassTasks / closedTasks.length) * 100) : 0;
+        const revisionBurden = closedTasks.length > 0 ? (totalRevisions / closedTasks.length).toFixed(2) : 0;
+        const qualityScore =Math.round((firstPassRate * 0.7) + ((100 - revisionBurden * 20) * 0.3));
+
         const html = `
             <div class="dashboard-cards">
-            <div class="dash-card">
-                <span>Assigned Tasks</span>
-                <h2>${tasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Closed Tasks</span>
-                <h2>${closedTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Open Tasks</span>
-                <h2>${openTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Overdue Tasks</span>
-                <h2>${overdueTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Efficiency</span>
-                <h2>${efficiency}%</h2>
-            </div>
-            <div class="dash-card">
-                <span>Tracked Hours</span>
-                <h2>${formatDuration(trackedHours)}</h2>
-            </div>
+                <div class="dash-card">
+                    <span>Assigned Tasks</span>
+                    <h2>${tasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Closed Tasks</span>
+                    <h2>${closedTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Open Tasks</span>
+                    <h2>${openTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Overdue Tasks</span>
+                    <h2>${overdueTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Efficiency</span>
+                    <h2>${efficiency}%</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Avg Iterations</span>
+                    <h2>${avgIterations}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>First Pass Rate</span>
+                    <h2>${firstPassRate}%</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Revision Burden</span>
+                    <h2>${revisionBurden}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Quality Score</span>
+                    <h2>${qualityScore}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Tracked Hours</span>
+                    <h2>${formatDuration(trackedHours)}</h2>
+                </div>
             </div>
             <div class="chart-grid">
-            <div class="chart-box">
-                <canvas id="employeeTaskChart"></canvas>
-            </div>
-            <div class="chart-box">
-                <canvas id="employeeTimelineChart"></canvas>
-            </div>
+                <div class="chart-box">
+                    <canvas id="employeeTaskChart"></canvas>
+                </div>
+                <div class="chart-box">
+                    <canvas id="employeeTimelineChart"></canvas>
+                </div>
             </div>
             <div class="card">
-            <h3> Recent Tasks </h3>
-            <div class="table-wrapper">
-                    <table>
-                        <thead>
-                            <tr>
-                            <th>Task</th>
-                            <th>Status</th>
-                            <th>Deadline</th>
-                            <th>Allocated</th>
-                            </tr>
-                        </thead>
-                        <tbody id="employeeTasksBody"></tbody>
-                    </table>
-            </div>
+                <h3> Recent Tasks </h3>
+                <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                <th>Task</th>
+                                <th>Status</th>
+                                <th>Deadline</th>
+                                <th>Allocated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employeeTasksBody"></tbody>
+                        </table>
+                </div>
             </div>
         `;
 
@@ -739,15 +849,6 @@ const analyticsFilters = {
         document.getElementById("employeeAnalyticsContent").innerHTML = html;
 
         renderEmployeeTaskChart(closedTasks, openTasks, overdueTasks);
-
-        // console.log("Logs Count", logs.length);
-        // console.table(logs.map(x => ({created_at: x.created_at, duration: x.duration})));
-        
-        // const uniqueDays = [...new Set(logs.map(x => x.created_at?.split("T")[0]))];
-
-        // console.log(uniqueDays.length);
-        // console.log(uniqueDays);
-
         renderEmployeeTimeline(logs);
         renderEmployeeTasks(tasks);
 
@@ -934,6 +1035,13 @@ const analyticsFilters = {
         const openTasks = tasks.filter(t => t.status?.toLowerCase() !== "closed");
         const overdueTasks = tasks.filter(t => {if(!t.deadline || t.status?.toLowerCase() === "closed"){return false;} return new Date(t.deadline) < new Date();});
         const completion = tasks.length > 0 ? Math.round((closedTasks.length / tasks.length) * 100) : 0;
+        const totalIterations = closedTasks.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const totalRevisions = closedTasks.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
+        const revisedTasks = closedTasks.filter(t => Number(t.revision_count || 0) > 0).length;
+        const avgIterations = closedTasks.length > 0 ? (totalIterations / closedTasks.length).toFixed(2) : 0;
+        const revisionRate = closedTasks.length > 0 ? Math.round((revisedTasks / closedTasks.length) * 100) : 0;
+        const avgRevisions = closedTasks.length > 0 ? (totalRevisions / closedTasks.length).toFixed(2) : 0;
+        const projectQualityScore = Math.max(0, Math.round(100 - revisionRate));
         const resourceIds = [...new Set(tasks.map(t => String(t.assigned_to)))];
 
         let trackedSeconds = 0;
@@ -945,58 +1053,74 @@ const analyticsFilters = {
 
         const html = `
             <div class="dashboard-cards">
-            <div class="dash-card">
-                <span>Total Tasks</span>
-                <h2>${tasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Closed Tasks</span>
-                <h2>${closedTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Open Tasks</span>
-                <h2>${openTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Overdue Tasks</span>
-                <h2>${overdueTasks.length}</h2>
-            </div>
-            <div class="dash-card">
-                <span>Completion</span>
-                <h2>${completion}%</h2>
-            </div>
-            <div class="dash-card">
-                <span>Tracked Time</span>
-                <h2> ${formatDuration(trackedSeconds)} </h2>
-            </div>
-            <div class="dash-card">
-                <span>Resources</span>
-                <h2>${resourceIds.length}</h2>
-            </div>
+                <div class="dash-card">
+                    <span>Total Tasks</span>
+                    <h2>${tasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Closed Tasks</span>
+                    <h2>${closedTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Open Tasks</span>
+                    <h2>${openTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Overdue Tasks</span>
+                    <h2>${overdueTasks.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Completion</span>
+                    <h2>${completion}%</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Tracked Time</span>
+                    <h2> ${formatDuration(trackedSeconds)} </h2>
+                </div>
+                <div class="dash-card">
+                    <span>Resources</span>
+                    <h2>${resourceIds.length}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Avg Iterations</span>
+                    <h2>${avgIterations}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Revision Rate</span>
+                    <h2>${revisionRate}%</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Avg Revisions</span>
+                    <h2>${avgRevisions}</h2>
+                </div>
+                <div class="dash-card">
+                    <span>Quality Score</span>
+                    <h2>${projectQualityScore}</h2>
+                </div>
             </div>
             <div class="chart-grid">
-            <div class="chart-box">
-                <canvas id="projectTaskChart"></canvas>
-            </div>
-            <div class="chart-box">
-                <canvas id="projectContributionChart"></canvas>
-            </div>
+                <div class="chart-box">
+                    <canvas id="projectTaskChart"></canvas>
+                </div>
+                <div class="chart-box">
+                    <canvas id="projectContributionChart"></canvas>
+                </div>
             </div>
             <div class="card">
-            <h3> Project Tasks </h3>
-            <div class="table-wrapper">
-                <table>
-                <thead>
-                    <tr>
-                    <th>Task</th>
-                    <th>Employee</th>
-                    <th>Status</th>
-                    <th>Deadline</th>
-                    </tr>
-                </thead>
-                <tbody id="projectTasksBody"></tbody>
-                </table>
-            </div>
+                <h3> Project Tasks </h3>
+                <div class="table-wrapper">
+                    <table>
+                    <thead>
+                        <tr>
+                            <th>Task</th>
+                            <th>Employee</th>
+                            <th>Status</th>
+                            <th>Deadline</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectTasksBody"></tbody>
+                    </table>
+                </div>
             </div>
         `;
 
@@ -1152,7 +1276,7 @@ const analyticsFilters = {
                 trackedSeconds += Number(log.duration || 0);
             });
 
-            const allocatedHours = empTasks.reduce((sum,task)=> sum + Number(task.allocated_hours || 0), 0);
+            const allocatedHours = empTasks.reduce((sum,task)=> sum + Number(task.allotted_hours || 0), 0);
             const trackedHours = trackedSeconds / 3600;
             const utilization = allocatedHours > 0 ? Math.round((trackedHours / allocatedHours) * 100) : 0;
 
@@ -1294,4 +1418,178 @@ const analyticsFilters = {
             <h2> ${overdueTasks} </h2>
             <p> Tasks requiring immediate attention </p>
             </div>`;
+    }
+
+    function renderIterationDistributionChart(tasks){
+        Chart.getChart("iterationDistributionChart")?.destroy();
+
+        const distribution = {
+            "1 Iteration": 0,
+            "2 Iterations": 0,
+            "3 Iterations": 0,
+            "4+ Iterations": 0
+        };
+
+        tasks.filter(t => t.status?.toLowerCase() === "closed").forEach(task => {
+            const iterations = Number(task.revision_count || 0) + 1;
+            if(iterations === 1){
+                distribution["1 Iteration"]++;
+            }
+            else if(iterations === 2){
+                distribution["2 Iterations"]++;
+            }
+            else if(iterations === 3){
+                distribution["3 Iterations"]++;
+            }
+            else{
+                distribution["4+ Iterations"]++;
+            }
+        });
+
+        new Chart(document.getElementById("iterationDistributionChart"),
+            {
+                type:"bar",
+                data:{
+                    labels:Object.keys(distribution),
+                    datasets:[{
+                        label:"Tasks",
+                        data:Object.values(distribution)
+                    }]
+                }
+            }
+        );
+    }
+
+    function renderMostRevisedTasks(tasks, projects){
+        const body = document.getElementById("mostRevisedTasksBody");
+
+        if(!body){
+            return;
+        }
+
+        body.innerHTML = "";
+        const ranking = tasks.filter(t => Number(t.revision_count || 0) > 0).sort((a,b) => Number(b.revision_count || 0) - Number(a.revision_count || 0)).slice(0,10);
+
+        ranking.forEach(task => {
+            const project = projects.find(p => String(p.id) === String(task.project_id));
+            body.innerHTML += `
+                <tr>
+                    <td>${task.title}</td>
+                    <td>${project?.name || "-"}</td>
+                    <td>
+                        ${Number(task.revision_count || 0) + 1}
+                    </td>
+                    <td>
+                        ${task.revision_count || 0}
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderMostRevisedEmployees(tasks, employees){
+        const body = document.getElementById("mostRevisedEmployeesBody");
+
+        if(!body){
+            return;
+        }
+
+        body.innerHTML = "";
+
+        const stats = {};
+
+        employees.forEach(emp => {
+            stats[String(emp.id)] = {
+                id: emp.id,
+                name: emp.name,
+                closedTasks: 0,
+                totalIterations: 0,
+                revisedTasks: 0
+            };
+
+        });
+
+        tasks.filter(t => t.status?.toLowerCase() === "closed").forEach(task => {
+            const empId = String(task.assigned_to);
+
+            if(!stats[empId]){
+                return;
+            }
+
+            stats[empId].closedTasks++;
+
+            const revisions = Number(task.revision_count || 0);
+            stats[empId].totalIterations += revisions + 1;
+
+            if(revisions > 0){
+                stats[empId].revisedTasks++;
+            }
+        });
+
+        const ranking = Object.values(stats).filter(emp => emp.closedTasks > 0).map(emp => {
+                const avgIterations = emp.totalIterations / emp.closedTasks;
+                const revisionRate = Math.round((emp.revisedTasks / emp.closedTasks) * 100);
+                return {...emp, avgIterations, revisionRate};
+            }).sort((a,b) => b.avgIterations - a.avgIterations).slice(0,10);
+
+        ranking.forEach(emp => {
+            body.innerHTML += `
+                <tr>
+                    <td>${emp.name}</td>
+                    <td>${emp.closedTasks}</td>
+                    <td>
+                        ${emp.avgIterations.toFixed(2)}
+                    </td>
+                    <td>
+                        ${emp.revisionRate}%
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderRevisionDistributionChart(tasks){
+        Chart.getChart("revisionDistributionChart") ?.destroy();
+
+        const distribution = {
+            "0":0,
+            "1":0,
+            "2":0,
+            "3":0,
+            "4+":0
+        };
+
+        tasks.filter(t => t.status?.toLowerCase() === "closed").forEach(task => {
+            const revisions = Number(task.revision_count || 0);
+            if(revisions === 0){
+                distribution["0"]++;
+            }
+            else if(revisions === 1){
+                distribution["1"]++;
+            }
+            else if(revisions === 2){
+                distribution["2"]++;
+            }
+            else if(revisions === 3){
+                distribution["3"]++;
+            }
+            else{
+                distribution["4+"]++;
+            }
+        });
+
+        new Chart(document.getElementById("revisionDistributionChart"),
+            {
+                type:"bar",
+                data:{
+                    labels: Object.keys(distribution),
+                    datasets:[
+                        {
+                            label: "Tasks",
+                            data: Object.values(distribution)
+                        }
+                    ]
+                }
+            }
+        );
     }
