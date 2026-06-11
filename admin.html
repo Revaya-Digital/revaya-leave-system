@@ -14,6 +14,7 @@
     <script src="supabase_client.js"></script>
     <script src="reports.js"></script>
     <script src="analytics.js"></script>
+    <script src="notificationService.js"></script>
   </head>
 
   <body>
@@ -90,6 +91,10 @@
               </li>
               <li data-page="tasks" onclick="openPage('tasks',this)">
                 <i class="fa-solid fa-list-check"></i> Tasks
+              </li>
+              <li data-page="taskEditRequests" onclick="openPage('taskEditRequests',this)">
+                <i class="fa-solid fa-pen-to-square"></i>
+                Task Edit Requests
               </li>
             </ul>
           </li>
@@ -2032,8 +2037,15 @@
           reviewed_by:empId})
         .eq("id",taskId);
 
+        const { data: task } = await db
+        .from("tasks")
+        .select(`id, title, assigned_to`)
+        .eq("id", taskId)
+        .single();
+
         hideLoader();
         showToast("Task approved successfully", "success");
+        createNotification(task.assigned_to, "Iteration Approved", `Iteration approved for "${task.title}"`, "iteration_approved", "task", taskId);
         document.querySelector(".modal") ?.remove();
         openTaskDetails(taskId);
       }
@@ -2057,7 +2069,7 @@
         const { data: task } =
         await db
         .from("tasks")
-        .select(`current_iteration_no`)
+        .select(`current_iteration_no, assigned_to, title, assigned_by`)
         .eq("id",taskId)
         .single();
 
@@ -2092,6 +2104,7 @@
 
         hideLoader();
         showToast("Revision requested", "success");
+        createNotification(task.assigned_to, "Revision Requested", `Revision requested for "${task.title}"`, "iteration_revision_requested", "task", taskId);
         document.querySelector(".modal") ?.remove();
         openTaskDetails(taskId);
       }
@@ -2140,8 +2153,15 @@
           throw error;
         }
 
+        const { data: task } = await db
+        .from("tasks")
+        .select("id, title, assigned_by, assigned_to")
+        .eq("id",taskId)
+        .single();
+
         hideLoader();
         showToast("Task approved successfully", "success");
+        createNotification(task.assigned_to, "Task Approved", "Your task has been approved", "task_approved", "task", taskId);
         const modal = document.querySelector(".task-details-modal");
         if(modal){
           modal.remove();
@@ -2157,13 +2177,21 @@
     async function closeTask(taskId){
       showLoader("Closing Task...");
       try{
-      await db
-      .from("tasks")
-      .update({
-        status:"closed",
-        closed_at:new Date().toISOString()
-      })
-      .eq("id",taskId);
+        await db
+        .from("tasks")
+        .update({
+          status:"closed",
+          closed_at:new Date().toISOString()
+        })
+        .eq("id",taskId);
+
+        const { data: task } = await db
+        .from("tasks")
+        .select("id, title, assigned_by, assigned_to")
+        .eq("id",taskId)
+        .single();
+
+        createNotification(task.assigned_to, "Task Closed", `Your task "${task.title}" has been closed`, "task_closed", "task", taskId);
       }
       catch(err){
         hideLoader();
@@ -2197,8 +2225,15 @@
         return;
       }
 
+      const { data: task } = await db
+      .from("tasks")
+      .select(`id, title, assigned_to`)
+      .eq("id", taskId)
+      .single();
+
       showToast("Comment added", "success");
       document.querySelector(".modal")?.remove();
+      createNotification(task.assigned_to, "Comments Added", `Comments Added for "${task.title}"`, "comment_added", "task", taskId);
       openTaskDetails(taskId);
     }
 
@@ -2219,9 +2254,15 @@
           throw error;
         }
 
-        hideLoader();
+        const { data: task } = await db
+        .from("tasks")
+        .select("id, title, assigned_by, assigned_to")
+        .eq("id",taskId)
+        .single();
 
+        hideLoader();
         showToast("Task rejected", "success");
+        createNotification(task.assigned_to, "Task Rejected", "Your task has been rejected", "task_rejected", "task", taskId);
         const modal = document.querySelector(".task-details-modal");
         if(modal){
           modal.remove();
@@ -2258,7 +2299,7 @@
 
         const { data: task, error: taskError } = await db
         .from("tasks")
-        .select("id,assigned_to,assigned_by")
+        .select("id,assigned_to,assigned_by,title")
         .eq("id",taskId)
         .single();
 
@@ -2309,6 +2350,7 @@
 
         hideLoader();
         showToast("Task deleted successfully","success");
+        createNotification(task.assigned_to, "Task Deleted", `Task deleted: "${task.title}"`, "task_deleted", "task", taskId);
         loadTasks();
       }
 
@@ -2862,6 +2904,227 @@
       loadTasks();
     }
 
+    async function renderTaskEditRequestsPage(){
+      document.getElementById("pageContent").innerHTML = `
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <h3>Task Edit Requests</h3>
+          </div>
+          <div class="table-wrapper">
+            <table id="taskEditRequestsTable">
+              <thead>
+                <tr>
+                  <th>Task</th>
+                  <th>Employee</th>
+                  <th>Current Values</th>
+                  <th>Requested Values</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="taskEditRequestsBody"> </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+      await loadTaskEditRequests();
+    }
+
+    async function loadTaskEditRequests(){
+      const { data, error } = await db
+      .from("task_edit_requests")
+      .select(`*,
+        task:tasks(id, title),
+        requester:employees!task_edit_requests_requested_by_fkey(id, name)`)
+        .order("created_at",{ascending:false});
+
+      if(error){
+        showToast(error.message,"error");
+        return;
+      }
+
+      const body = document.getElementById("taskEditRequestsBody");
+
+      body.innerHTML = "";
+      data.forEach(r=>{
+        body.innerHTML += `
+          <tr>
+            <td> ${r.task?.title || "-"} </td>
+            <td> ${r.requester?.name || "-"} </td>
+            <td>
+              Deadline: ${r.old_deadline || "-"}
+              <br>
+              Hours: ${r.old_hours || "-"}
+            </td>
+            <td>
+              Deadline: ${r.requested_deadline || "-"}
+              <br>
+              Hours: ${r.requested_hours || "-"}
+            </td>
+            <td> ${r.reason || "-"} </td>
+            <td>
+              <span class="badge ${r.status === "approved" ? "badge-good" : r.status === "pending" ? "badge-pending" : "badge-bad"}">
+                ${r.status}
+              </span>
+            </td>
+            <td>
+              ${r.status === "pending" ? `
+                <button onclick="approveTaskEditRequest('${r.id}')">
+                  Approve
+                </button>
+                <button class="danger-btn" onclick="rejectTaskEditRequest('${r.id}')">
+                  Reject
+                </button>` : "-"}
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+
+    async function approveTaskEditRequest(requestId){
+      try{
+        showLoader("Approving Request...");
+
+        const currentEmpId = await getEmployeeId();
+        const { data: request, error: requestError } = await db
+        .from("task_edit_requests")
+        .select("*")
+        .eq("id",requestId)
+        .single();
+
+        if(requestError){
+          throw requestError;
+        }
+
+        if(request.status !== "pending"){
+          throw new Error("Request already processed");
+        }
+
+        const taskUpdates = {};
+
+        const deadlineChanged = request.old_deadline !== request.requested_deadline;
+        const hoursChanged = Number(request.old_hours || 0) !== Number(request.requested_hours || 0);
+
+        if(deadlineChanged){
+          taskUpdates.deadline = request.requested_deadline;
+
+          await db
+          .from("task_deadline_history")
+          .insert({
+            task_id: request.task_id,
+            old_deadline: request.old_deadline,
+            new_deadline: request.requested_deadline,
+            changed_by: currentEmpId,
+            change_reason: request.reason
+          });
+        }
+
+        if(hoursChanged){
+          taskUpdates.allotted_hours = request.requested_hours;
+
+          await db
+          .from("task_estimation_history")
+          .insert({
+            task_id: request.task_id,
+            old_hours: request.old_hours,
+            new_hours: request.requested_hours,
+            changed_by: currentEmpId,
+            change_reason: request.reason
+          });
+        }
+
+        if(Object.keys(taskUpdates).length){
+          const { error } = await db
+          .from("tasks")
+          .update(taskUpdates)
+          .eq("id", request.task_id
+          );
+
+          if(error){
+            throw error;
+          }
+        }
+
+        const { error: updateError } = await db
+        .from("task_edit_requests")
+        .update({
+          status: "approved",
+          reviewed_by: currentEmpId,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq("id", requestId);
+
+        if(updateError){
+          throw updateError;
+        }
+
+        const { data: task } = await db
+        .from("tasks")
+        .select(`title`)
+        .eq("id", request.task_id)
+        .single();
+
+        createNotification(request.requested_by, "Edit Request Approved", `Your modification request for "${task?.title}" has been approved`, "edit_request_approved", "task", request.task_id);
+
+        hideLoader();
+        showToast("Request approved", "success");
+        loadTaskEditRequests();
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
+
+    async function rejectTaskEditRequest(requestId){
+      const reason = prompt("Reason for rejection");
+      if(!reason || !reason.trim()){
+        return;
+      }
+
+      try{
+        showLoader("Rejecting Request...");
+
+        const currentEmpId = await getEmployeeId();
+        const { data: request, error } = await db
+        .from("task_edit_requests")
+        .select("*")
+        .eq("id",requestId)
+        .single();
+
+        if(error){
+          throw error;
+        }
+
+        await db
+        .from("task_edit_requests")
+        .update({
+          status: "rejected",
+          review_notes: reason,
+          reviewed_by: currentEmpId,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq("id", requestId);
+
+        const { data: task } = await db
+        .from("tasks")
+        .select("title")
+        .eq("id", request.task_id)
+        .single();
+
+        createNotification(request.requested_by, "Edit Request Rejected", `Your modification request for "${task?.title}" was rejected`, "edit_request_rejected", "task", request.task_id);
+        hideLoader();
+        showToast("Request rejected", "success");
+        loadTaskEditRequests();
+      }
+      catch(err){
+        hideLoader();
+        showToast(err.message, "error");
+      }
+    }
+
     function openProjectModal(clients){
       console.log(clients)
       let clientOptions = "";
@@ -3092,8 +3355,13 @@
         assigned_to: employeeId,
         assigned_by: empId,
         deadline: deadline,
+        original_deadline: deadline,
         status: "pending",
-        allotted_hours: Number(hours)
+        approval_status: "approved",
+        approved_by: empId,
+        approved_at: new Date().toISOString(),
+        allotted_hours: Number(hours),
+        original_allotted_hours: Number(hours)
       });
 
       btn.disabled = false;
@@ -3108,6 +3376,7 @@
       hideLoader();
       btn.closest(".modal").remove();
       showToast("Task created","success");
+      createNotification(employeeId, "New Task Assigned", `You have been assigned a new task: "${title}"`, "task_assigned", "task");
       renderTasksPage();
     }
 
@@ -3218,7 +3487,7 @@
             </textarea>
           </div>
           <div class="modal-actions">
-            <button onclick="updateTask('${task.id}',this)">
+            <button ${task.status === "closed" ? "disabled" : ""} onclick="updateTask('${task.id}',this)">
               Update Task
             </button>
             <button class="secondary-btn" onclick="this.closest('.modal').remove()">
@@ -3234,6 +3503,27 @@
     async function updateTask(taskId,btn){
       btn.disabled = true;
       showLoader("Updating Task...");
+      const empId = await getEmployeeId();
+      const { data: existingTask, error: taskError } = await db
+      .from("tasks")
+      .select("*")
+      .eq("id", taskId)
+      .single();
+
+      if(taskError){
+          hideLoader();
+          showToast(taskError.message,"error");
+          btn.disabled = false;
+          return;
+      }
+
+      if(existingTask.status?.toLowerCase() === "closed"){
+        hideLoader();
+        showToast("Closed tasks cannot be modified", "error");
+        btn.disabled = false;
+        return;
+      }
+
       const payload = {
         project_id:document.getElementById("editTaskProject").value,
         assigned_to:document.getElementById("editTaskEmployee").value,
@@ -3243,6 +3533,45 @@
         status:document.getElementById("editTaskStatus").value,
         allotted_hours:Number(document.getElementById("editTaskHours").value)
       };
+
+      if(existingTask.deadline !== payload.deadline){
+        const { error: historyError } =
+        await db
+        .from("task_deadline_history")
+        .insert({
+            task_id: taskId,
+            old_deadline: existingTask.deadline,
+            new_deadline: payload.deadline,
+            changed_by: empId,
+            reason: "Admin task update"
+        });
+
+        if(historyError){
+            hideLoader();
+            showToast(historyError.message, "error");
+            btn.disabled = false;
+            return;
+        }
+      }
+
+      if(Number(existingTask.allotted_hours || 0) !== Number(payload.allotted_hours || 0)){
+        const { error: estimateError } = await db
+        .from("task_estimation_history")
+        .insert({
+            task_id: taskId,
+            old_hours: existingTask.allotted_hours,
+            new_hours: payload.allotted_hours,
+            changed_by: empId,
+            reason: "Admin task update"
+        });
+
+        if(estimateError){
+            hideLoader();
+            showToast(estimateError.message, "error");
+            btn.disabled = false;
+            return;
+        }
+      }
 
       const { error } = await db
       .from("tasks")
@@ -3260,6 +3589,7 @@
       btn.closest(".modal").remove();
       btn.disabled = false;
       showToast("Task updated","success");
+      createNotification(payload.assigned_to, "Task Updated", `Your task "${payload.title}" has been updated. Please check the details.`, "task_updated", "task", taskId);
       renderTasksPage();
     }
 
@@ -4382,6 +4712,11 @@
       if(page==="tasks"){
         title.innerText="Tasks";
         renderTasksPage();
+      }
+
+      if(page==="taskEditRequests"){
+        title.innerText="Task Edit Requests";
+        renderTaskEditRequestsPage();
       }
 
       if(page === "access"){

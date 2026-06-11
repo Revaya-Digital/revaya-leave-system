@@ -11,6 +11,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="supabase_client.js"></script>
+  <script src="notificationService.js"></script>
 </head>
 
 
@@ -66,7 +67,15 @@
           <h2>Employee Dashboard</h2>
           <p id="welcomeUser"></p>
         </div>
-        <button class="logout-btn" onclick="logout()">Logout</button>
+        <div class="topbar-actions">
+          <button class="notification-btn" onclick="openNotifications()">
+            🔔
+            <span id="notificationBadge" class="notification-badge"> 0 </span>
+          </button>
+          <button class="logout-btn" onclick="logout()">
+            Logout
+          </button>
+        </div>
       </header>
       <div class="main-content"  id="pageContent">
       </div>
@@ -316,8 +325,8 @@ data.forEach(proj=>{
             <button onclick="openTaskDetails('${t.id}')">
               View
             </button>
-            <button onclick="openEmployeeEditTaskModal('${t.id}')">
-              Edit
+            <button onclick="handleTaskModification('${t.id}')">
+              Modify
             </button>
             <button class="danger-btn" onclick="deleteEmployeeTask('${t.id}',this)">
               Delete
@@ -328,6 +337,30 @@ data.forEach(proj=>{
     });
 
     document.getElementById("teamTaskTable").innerHTML = rows;
+  }
+
+  async function handleTaskModification(taskId){
+    const { data: task, error } = await db
+      .from("tasks")
+      .select("*")
+      .eq("id", taskId)
+      .single();
+
+    if(error){
+      showToast(error.message, "error");
+      return;
+    }
+
+    const currentEmpId = await getEmployeeId();
+    const selfCreated = String(task.assigned_by) === String(currentEmpId);
+    const approvalPending = task.approval_status === "pending";
+
+    if(selfCreated && approvalPending){
+      openEmployeeEditTaskModal(taskId);
+      return;
+    }
+
+    openTaskEditRequestModal(task);
   }
 
   async function canApproveTask(task){
@@ -350,7 +383,6 @@ data.forEach(proj=>{
 
     return creator?.manager_id === currentEmpId;
   }
-
 
   async function openTaskDetails(taskId){
     showLoader("Loading Task...");
@@ -487,6 +519,7 @@ data.forEach(proj=>{
           }  
         </div>
         <div class="modal-actions">
+          
           <button class="secondary-btn" onclick="this.closest('.modal').remove()">
             Close
           </button>
@@ -504,7 +537,7 @@ document.body.appendChild(modal);
 
       const { data: task } = await db
       .from("tasks")
-      .select("id,assigned_by")
+      .select("id, title, assigned_by, assigned_to")
       .eq("id",taskId)
       .single();
 
@@ -531,6 +564,7 @@ document.body.appendChild(modal);
       }
 
       showToast("Task Approved", "success");
+      createNotification(task.assigned_to, "Task Approved", "Your task has been approved", "task_approved", "task", taskId);
       document.querySelector(".modal")?.remove();
       openTaskDetails(taskId);
     }
@@ -546,7 +580,7 @@ document.body.appendChild(modal);
 
       const { data: task } = await db
       .from("tasks")
-      .select("id,assigned_by")
+      .select("id, title, assigned_by, assigned_to")
       .eq("id",taskId)
       .single();
 
@@ -570,9 +604,8 @@ document.body.appendChild(modal);
       }
 
       showToast("Task Rejected", "success");
-
+      createNotification(task.assigned_to, "Task Rejected", "Your task has been rejected", "task_rejected", "task", taskId);
       document.querySelector(".modal")?.remove();
-
       openTaskDetails(taskId);
     }
     catch(err){
@@ -610,8 +643,15 @@ async function approveIteration(iterationId, taskId){
       comment: "Iteration approved"
     });
 
+    const { data: task } = await db
+    .from("tasks")
+    .select(`id, title, assigned_to, assigned_by`)
+    .eq("id", taskId)
+    .single();
+
     hideLoader();
     showToast("Task approved successfully", "success");
+    createNotification(task.assigned_to, "Iteration Approved", `Iteration approved for "${task.title}"`, "iteration_approved", "task", taskId);
     document.querySelector(".modal") ?.remove();
     openTaskDetails(taskId);
   }
@@ -642,7 +682,14 @@ async function addTaskComment(taskId, iterationId = null){
     return;
   }
 
+  const { data: task } = await db
+  .from("tasks")
+  .select(`id, title, assigned_to`)
+  .eq("id", taskId)
+  .single();
+
   showToast("Comment added", "success");
+  createNotification(task.assigned_to, "Comments Added", `Comments Added for "${task.title}"`, "comment_added", "task", taskId);
   document.querySelector(".modal")?.remove();
   openTaskDetails(taskId);
 }
@@ -660,7 +707,7 @@ async function requestRevision(iterationId, taskId){
   try{
     const { data: task } = await db
     .from("tasks")
-    .select(`current_iteration_no`)
+    .select(`current_iteration_no, assigned_to, title, assigned_by`)
     .eq("id",taskId)
     .single();
 
@@ -695,14 +742,14 @@ async function requestRevision(iterationId, taskId){
     await db
     .from("tasks")
     .update({
-      current_iteration_no:nextIteration,
-      revision_count:
-      nextIteration - 1,
-      status:"pending"})
+      current_iteration_no: nextIteration,
+      revision_count: nextIteration - 1,
+      status: "pending"})
     .eq("id",taskId);
 
     hideLoader();
     showToast("Revision requested", "success");
+    createNotification(task.assigned_to, "Revision Requested", `Revision requested for "${task.title}"`, "iteration_revision_requested", "task", taskId);
     document.querySelector(".modal") ?.remove();
     openTaskDetails(taskId);
   }
@@ -748,7 +795,7 @@ async function deleteEmployeeTask(taskId,btn){
 
     const { data: task, error: taskError } = await db
     .from("tasks")
-    .select("id,assigned_by")
+    .select("id,assigned_by, title, assigned_to")
     .eq("id",taskId)
     .single();
 
@@ -798,6 +845,7 @@ async function deleteEmployeeTask(taskId,btn){
 
     hideLoader();
     showToast("Task deleted successfully", "success");
+    createNotification(task.assigned_to, "Task Deleted", `Task deleted: "${task.title}"`, "task_deleted", "task", taskId);
     loadTeamTasks();
 
   }
@@ -921,6 +969,144 @@ async function openEmployeeEditTaskModal(taskId){
   document.body.appendChild(modal);
 }
 
+function openTaskEditRequestModal(task){
+  const modal = document.createElement("div");
+  modal.className = "modal";
+  modal.style.display = "flex";
+
+  modal.innerHTML = `
+    <div class="modal-content">
+      <h3> Modify Task Request </h3>
+      <div class="form-grid">
+        <div class="form-field">
+          <label> Task </label>
+          <input class="input-field" value="${task.title}" disabled>
+        </div>
+        <div class="form-field">
+          <label> Current Deadline </label>
+          <input class="input-field" value="${task.deadline || "-"}" disabled>
+        </div>
+        <div class="form-field">
+          <label> Requested Deadline </label>
+          <input type="date" id="requestDeadline" class="input-field" value="${task.deadline || ""}">
+        </div>
+        <div class="form-field">
+          <label> Current Hours </label>
+          <input class="input-field" value="${task.allotted_hours || 0}" disabled>
+        </div>
+        <div class="form-field">
+          <label> Requested Hours </label>
+          <input type="number" id="requestHours" class="input-field" value="${task.allotted_hours || 0}">
+        </div>
+      </div>
+      <div class="form-field">
+        <label> Reason </label>
+        <textarea id="requestReason" class="input-field" style="width:100%; max-width:100%; min-height:120px;">
+        </textarea>
+      </div>
+      <div class="modal-actions">
+        <button onclick="submitTaskEditRequest('${task.id}')">
+          Submit Request
+        </button>
+        <button class="secondary-btn" onclick="this.closest('.modal').remove()">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+}
+
+async function submitTaskEditRequest(taskId){
+  const requestedDeadline = document.getElementById("requestDeadline").value;
+  const requestedHours = Number(document.getElementById("requestHours").value);
+  const reason = document.getElementById("requestReason").value .trim();
+
+  if(!reason){
+    showToast("Reason is required", "error");
+    return;
+  }
+
+  showLoader("Submitting Request...");
+  const { data: task, error: taskError } = await db
+  .from("tasks")
+  .select("*")
+  .eq("id", taskId)
+  .single();
+
+  if(taskError){
+    hideLoader();
+    showToast(taskError.message,"error");
+
+    return;
+  }
+
+  if(task.status === "closed"){
+    hideLoader();
+    showToast("Closed tasks cannot be modified", "error");
+
+    return;
+  }
+
+  const deadlineChanged = requestedDeadline !== task.deadline;
+  const hoursChanged = requestedHours !== Number(task.allotted_hours || 0);
+
+  if(!deadlineChanged && !hoursChanged){
+    hideLoader();
+    showToast("No changes detected", "error");
+    return;
+  }
+
+  const { data: existingRequests } = await db
+  .from("task_edit_requests")
+  .select("id")
+  .eq("task_id", taskId)
+  .eq("status", "pending");
+
+  if(
+    existingRequests?.length
+  ){
+    hideLoader();
+    showToast("A pending request already exists", "error");
+    return;
+  }
+
+  let requestType = "deadline";
+
+  if(deadlineChanged && hoursChanged){
+    requestType = "deadline_and_hours";
+  }
+  else if(hoursChanged){
+    requestType = "hours";
+  }
+
+  const requestedBy = await getEmployeeId();
+  const { error } = await db
+    .from("task_edit_requests")
+    .insert({
+      task_id: task.id,
+      request_type: requestType,
+      old_deadline: task.deadline,
+      requested_deadline: requestedDeadline,
+      old_hours: task.allotted_hours,
+      requested_hours: requestedHours,
+      reason,
+      requested_by: requestedBy
+
+    });
+  hideLoader();
+
+  if(error){
+    showToast(error.message, "error");
+    return;
+  }
+
+  showToast("Edit request submitted", "success");
+  document.querySelectorAll(".modal").forEach(m => m.remove());
+  loadTeamTasks();
+}
+
 async function updateEmployeeTask(taskId,btn){
   btn.disabled = true;
   showLoader("Updating Task...");
@@ -972,6 +1158,7 @@ async function updateEmployeeTask(taskId,btn){
 
     hideLoader();
     showToast("Task updated successfully", "success");
+    createNotification(task.assigned_to, "Task Updated", `Task updated: "${task.title}"`, "task_updated", "task", taskId);
     btn.closest(".modal").remove();
     loadTeamTasks();
 
@@ -1093,6 +1280,7 @@ async function createEmployeeTask(btn){
 
   btn.closest(".modal").remove();
   showToast("Task created","success");
+  createNotification(assignedTo, "Task Created", `Task created: "${payload.title}"`, "task_assigned", "task", null);
   loadTeamTasks();
 }
 
@@ -1383,7 +1571,7 @@ async function stopTask(taskId){
 async function submitIteration(taskId){
   const { data: task } = await db
   .from("tasks")
-  .select(`
+  .select(`title, assigned_by, assigned_to,
     current_iteration_no,
     approval_status,
     task_iterations(id, iteration_no)
@@ -1397,7 +1585,6 @@ async function submitIteration(taskId){
   }
 
   const empId = await getEmployeeId();
-
   const currentIteration = task.task_iterations.find(i=>i.iteration_no === task.current_iteration_no);
 
   await db
@@ -1425,16 +1612,14 @@ async function submitIteration(taskId){
   .eq("id",taskId);
 
   showToast("Iteration submitted for review", "success");
+  createNotification(task.assigned_by, "Iteration Submitted", "A task iteration requires review", "iteration_submitted", "task", taskId);
   loadMyTasks();
 }
 
 function renderReimbursementsPage(){
-
   document.getElementById("pageContent").innerHTML = `
-
     <div class="card">
       <h3>Submit Expense</h3>
-
       <div class="form-row">
         <div class="form-field">
           <label>Amount</label>
@@ -1501,7 +1686,6 @@ function renderReimbursementsPage(){
 }
 
 function renderPayslipsPage(){
-
   document.getElementById("pageContent").innerHTML = `
     <div class="card">
       <h3>My Payslips</h3>
@@ -1524,7 +1708,6 @@ function renderPayslipsPage(){
 }
 
 function renderLeavesPage(){
-
   document.getElementById("pageContent").innerHTML = `
     <div id="balanceCards" class="balance-grid"></div>
     <div class="card">
@@ -1651,7 +1834,6 @@ function renderLeavesPage(){
 }
 
 function renderDashboard(){
-
   document.getElementById("pageContent").innerHTML = `
     <div id="balanceCards" class="balance-grid"></div>
 
@@ -1909,7 +2091,6 @@ if(!emp){
   })
 
   emp = { name: meta.name || "Employee" }
-
 }
 
 document.getElementById("welcomeUser").innerHTML = 
@@ -1917,6 +2098,7 @@ document.getElementById("welcomeUser").innerHTML =
 }
 
 loadUserName();
+loadNotificationCount();
 
 async function getEmployeeId() {
   const { data: user } = await db.auth.getUser();
