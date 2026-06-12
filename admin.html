@@ -1053,6 +1053,7 @@
       doc.setFont("helvetica","bold");
       doc.text("MONTHLY INVOICE", 70, 20);
       doc.setFontSize(11);
+      doc.text(invoice.invoice_title || "INVOICE", 88, 25);
 
       function drawLabelValue(label, value, x, y){
         doc.setFont("helvetica","bold");
@@ -1914,6 +1915,7 @@
         assignee:employees!tasks_assigned_to_fkey(id, name),
         assigner:employees!tasks_assigned_by_fkey(id, name),
         task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name)),
+        task_logs(duration)),
         task_comments(*, employee:employees(name))
       `)
       .eq("id",taskId)
@@ -1932,6 +1934,12 @@
     async function renderTaskDetailsModal(task){
       const empId = await getEmployeeId();
       const iterations = [...(task.task_iterations || [])].sort((a,b)=>a.iteration_no - b.iteration_no);
+      let totalTaskSeconds = 0;
+      iterations.forEach(i=>{
+        const iterationSeconds = (i.task_logs || []).reduce((sum,log)=>sum + Number(log.duration || 0), 0);
+        i.totalSeconds = iterationSeconds;
+        totalTaskSeconds += iterationSeconds;
+      });
       const modal = document.createElement("div");
       modal.className = "modal task-details-modal";
       modal.style.display = "flex";
@@ -1954,6 +1962,12 @@
             <div>
               <strong>Revision Count</strong>
               <div>${task.revision_count || 0}</div>
+            </div>  
+            <div>
+              <strong>Total Tracked</strong>
+              <div>
+                ${formatDuration(totalTaskSeconds)}
+              </div>
             </div>
           </div>
           ${task.approval_status === "pending" ? `
@@ -1995,6 +2009,7 @@
                 <p> Reviewed: ${i.reviewed_at ? new Date(i.reviewed_at).toLocaleString() : "-"} </p>
                 <p> Reviewer: ${i.reviewer?.name || "-"} </p>
                 <p> Notes: ${i.review_notes || "-"} </p>
+                <p> Hours: ${formatDuration(i.totalSeconds)} </p>
                 ${i.status === "submitted" && task.assigned_to != empId ? `
                 <div style="margin-top:10px">
                   <button onclick="approveIteration('${i.id}','${task.id}')">
