@@ -392,8 +392,7 @@ data.forEach(proj=>{
       projects(name),
       assignee:employees!tasks_assigned_to_fkey(id, name),
       assigner:employees!tasks_assigned_by_fkey(id, name),
-      task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name),
-      task_logs(duration)),
+      task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name), task_logs(duration)),
       task_comments(*, employee:employees(name))`)
     .eq("id",taskId)
     .single();

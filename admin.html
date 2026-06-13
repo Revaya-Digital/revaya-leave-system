@@ -1914,8 +1914,8 @@
         projects(name),
         assignee:employees!tasks_assigned_to_fkey(id, name),
         assigner:employees!tasks_assigned_by_fkey(id, name),
-        task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name)),
-        task_logs(duration)),
+        task_iterations(*, reviewer:employees!task_iterations_reviewed_by_fkey(name), task_logs(duration)),
+        task_logs(duration),
         task_comments(*, employee:employees(name))
       `)
       .eq("id",taskId)
@@ -1933,13 +1933,20 @@
   
     async function renderTaskDetailsModal(task){
       const empId = await getEmployeeId();
-      const iterations = [...(task.task_iterations || [])].sort((a,b)=>a.iteration_no - b.iteration_no);
+      const iterations = [...(task.task_iterations || [])].sort((a,b)=> a.iteration_no - b.iteration_no);
       let totalTaskSeconds = 0;
       iterations.forEach(i=>{
         const iterationSeconds = (i.task_logs || []).reduce((sum,log)=>sum + Number(log.duration || 0), 0);
         i.totalSeconds = iterationSeconds;
         totalTaskSeconds += iterationSeconds;
       });
+
+      console.log("Task Iterations with total seconds:", iterations);
+      console.log("Total Task Seconds:", totalTaskSeconds);
+      console.log("Formatted Total Task Duration:", formatDuration(totalTaskSeconds));
+
+
+
       const modal = document.createElement("div");
       modal.className = "modal task-details-modal";
       modal.style.display = "flex";
@@ -2788,6 +2795,8 @@
       .eq("status","active")
       .order("name");
 
+      window.projectClients = clients || [];
+
       let rows = "";
       projects.forEach(p=>{
         rows += `
@@ -2808,7 +2817,7 @@
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
             <h3>Projects</h3>
-            <button onclick="openProjectModal(${JSON.stringify(clients)})">
+            <button onclick="openProjectModal(window.projectClients)">
               Create Project
             </button>
           </div>
@@ -3141,7 +3150,6 @@
     }
 
     function openProjectModal(clients){
-      console.log(clients)
       let clientOptions = "";
         clients.forEach(c=>{
           clientOptions += `
