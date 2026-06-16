@@ -123,6 +123,15 @@ async function login(event) {
   if(role.name === "admin"){
     window.location = "admin.html";
   }else{
+    try{
+      if("Notification" in window && Notification.permission === "default")
+      {
+        await Notification.requestPermission();
+      }
+    }
+    catch(err){
+      console.log(err);
+    }
     window.location = "employee.html";
   }
 }

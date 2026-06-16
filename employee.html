@@ -1528,7 +1528,10 @@ async function startTask(taskId){
   });
 
   await db.from("tasks")
-  .update({status:"in_progress"})
+  .update({
+    status: "in_progress",
+    next_verification_at: generateNextVerificationTime()
+  })
   .eq("id", taskId);
 
   showToast("Task started","success");
@@ -2752,6 +2755,39 @@ loadEmployeeTypeFilter();
 
 }
 
+function generateNextVerificationTime(){
+  const minMinutes = 1;
+  const maxMinutes = 1;
+  const randomMinutes = Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
+  const next = new Date();
+
+  next.setMinutes(next.getMinutes() + randomMinutes);
+
+  return next.toISOString();
+}
+
+async function updateHeartbeat(){
+  try{
+    const empId = await getEmployeeId();
+    await db
+    .from("employees")
+    .update({
+      last_seen_at:new Date().toISOString()
+    })
+    .eq("id", empId);
+  }
+  catch(err){
+    console.error("Heartbeat Error:", err);
+  }
+}
+
+function startHeartbeat(){
+  updateHeartbeat();
+  setInterval(()=>{
+    updateHeartbeat();
+  },30000);
+}
+
 document.addEventListener("change", function(e){
 
     if(e.target.type === "file"){
@@ -2768,6 +2804,211 @@ document.addEventListener("change", function(e){
     }
 
   });
+
+let lastActivityTime = Date.now();
+
+["mousemove", "keydown", "click", "scroll"].forEach(eventType => {
+  document.addEventListener(eventType,()=>{
+    lastActivityTime = Date.now();
+  });
+});
+
+let verificationCountdown = null;
+function showActivityVerificationModal(verification){
+  if(document.getElementById("activityVerificationModal")){
+    return;
+  }
+
+  let remaining = 60;
+  const modal = document.createElement("div");
+  modal.id = "activityVerificationModal";
+  modal.style.cssText = `position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:999999; display:flex; align-items:center; justify-content:center;`;
+  modal.innerHTML = `
+    <div style="width:500px; max-width:90%; background:white; border-radius:12px; padding:30px; text-align:center;">
+      <h2> Activity Verification Required </h2>
+      <p> Please confirm you are actively working. </p>
+      <h1 id="verificationTimer"> 60 </h1>
+      <div style="display:flex; gap:10px; justify-content:center; margin-top:20px;">
+        <button id="continueWorkBtn" style="padding:12px 20px;"> Continue Working </button>
+        <button id="pauseTrackingBtn" style="padding:12px 20px;"> Pause Tracking </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  if(Notification.permission === "granted"){
+    new Notification(
+      "Activity Verification Required",
+      {
+        body:"Please confirm within 1 minute.",
+        requireInteraction:true
+      }
+    );
+  }
+  try{
+    const audio = new Audio("notification.wav");
+    audio.volume = 1;
+    audio.play();
+    audio.play();
+  }
+  catch(err){
+    console.error("Audio Error:", err);
+  }
+
+  verificationCountdown = setInterval(()=>{
+    remaining--;
+
+    const timer = document.getElementById("verificationTimer");
+
+    if(timer){
+      timer.innerText = remaining;
+    }
+
+    if(remaining <= 0){
+      clearInterval(verificationCountdown);
+      modal.remove();
+    }
+  },1000);
+
+  document.getElementById("continueWorkBtn").onclick = async ()=>{
+    clearInterval(verificationCountdown);
+
+    await db
+    .from("activity_verifications")
+    .update({
+      verification_status: "confirmed",
+      response_type: "continue_working",
+      responded_at: new Date().toISOString()
+    })
+    .eq("id", verification.id)
+    .eq("verification_status","pending");
+
+    const empId = await getEmployeeId();
+    const { data: emp } = await db
+    .from("employees")
+    .select("verification_successes")
+    .eq("id", empId)
+    .single();
+
+    await db
+    .from("employees")
+    .update({
+      verification_successes: (emp?.verification_successes || 0) + 1})
+    .eq("id", empId);
+
+    await db
+    .from("tasks")
+    .update({
+      next_verification_at:
+      generateNextVerificationTime()
+    })
+    .eq("id", verification.task_id);
+
+    modal.remove();
+    showToast("Activity Confirmed", "success");
+  };
+
+
+  document.getElementById("pauseTrackingBtn").onclick = async ()=>{
+    clearInterval(verificationCountdown);
+
+    const empId = await getEmployeeId();
+    const { data: activeLog }
+      = await db
+      .from("task_logs")
+      .select("*")
+      .eq("employee_id", empId)
+      .is("end_time", null)
+      .single();
+
+    if(activeLog){
+      const duration = Math.floor((new Date() - new Date(activeLog.start_time)) / 1000);
+
+      await db
+      .from("task_logs")
+      .update({
+        end_time:
+        new Date().toISOString(),
+        duration,
+        stop_reason:
+        "pause_tracking",
+        verification_id:
+        verification.id
+      })
+      .eq("id", activeLog.id);
+
+    }
+
+    await db
+    .from("tasks")
+    .update({
+      status:"pending",
+      next_verification_at:null
+    })
+    .eq("id", verification.task_id);
+
+    await db
+    .from("activity_verifications")
+    .update({
+      verification_status: "paused",
+      response_type: "pause_tracking",
+      responded_at: new Date().toISOString()
+    })
+    .eq("id", verification.id)
+    .eq("verification_status","pending");
+
+    modal.remove();
+    showToast("Tracking Paused", "success");
+  };
+}
+
+async function checkPendingVerification(){
+  const empId = await getEmployeeId();
+  const { data } = await db
+  .from("activity_verifications")
+  .select("*")
+  .eq("employee_id", empId)
+  .eq("verification_status", "pending")
+  .order("created_at",{ascending:false})
+  .limit(1)
+  .maybeSingle();
+
+  if(data){
+    showActivityVerificationModal(data);
+  }
+}
+
+function initializeActivityVerificationListener(){
+
+  db.channel("activity-verifications")
+  .on(
+    "postgres_changes",
+    {
+      event:"INSERT",
+      schema:"public",
+      table:"activity_verifications"
+    },
+
+    async(payload)=>{
+       console.log("Verification received", payload.new);
+       const empId = await getEmployeeId();
+
+       console.log("CURRENT EMP:", empId);
+       console.log("PAYLOAD EMP:", payload.new.employee_id);
+
+       if(payload.new.employee_id !== empId){
+         return;
+       }
+
+       if(payload.new.verification_status !== "pending"){
+         return;
+       }
+
+       showActivityVerificationModal(payload.new);
+    }
+  )
+  .subscribe();
+}
 
 function initAllDatePickers(){
   document.querySelectorAll(".date-input").forEach(input => {
@@ -2801,7 +3042,14 @@ function initAllDatePickers(){
 
 }
 
-openEmployeePage("dashboard");
+
+(async()=>{
+  startHeartbeat();
+  await checkPendingVerification();
+  initializeActivityVerificationListener();
+  openEmployeePage("dashboard");
+})();
+
 </script>
 
 <div id="toastContainer"></div>

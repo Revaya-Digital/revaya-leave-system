@@ -1,0 +1,10 @@
+{
+  "imports": {
+    "@supabase/functions-js": "jsr:@supabase/functions-js@^2"
+  },
+  "functions": {
+    "check_activity_verifications": {
+      "verify_jwt": false
+    }
+  }
+}
