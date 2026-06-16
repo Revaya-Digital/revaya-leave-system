@@ -7,8 +7,8 @@ const supabase = createClient(
 );
 
 function generateNextVerificationTime() {
-  const min = 1;
-  const max = 1;
+  const min = 35;
+  const max = 95;
   const randomMinutes = Math.floor(Math.random() * (max - min + 1)) + min;
   const next = new Date();
 

@@ -2756,8 +2756,8 @@ loadEmployeeTypeFilter();
 }
 
 function generateNextVerificationTime(){
-  const minMinutes = 1;
-  const maxMinutes = 1;
+  const minMinutes = 35;
+  const maxMinutes = 95;
   const randomMinutes = Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
   const next = new Date();
 
