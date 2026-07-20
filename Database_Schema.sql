@@ -1,58 +1,6 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
-CREATE TABLE public.clients (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  company_name text,
-  email text,
-  phone text,
-  address text,
-  notes text,
-  status text DEFAULT 'active'::text,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT clients_pkey PRIMARY KEY (id),
-  CONSTRAINT clients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
-);
-CREATE TABLE public.employee_bank_details (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  account_title text,
-  bank_name text,
-  account_number text,
-  iban text,
-  is_active boolean DEFAULT true,
-  created_at timestamp without time zone DEFAULT now(),
-  employee_id uuid,
-  CONSTRAINT employee_bank_details_pkey PRIMARY KEY (id),
-  CONSTRAINT employee_bank_details_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
-);
-CREATE TABLE public.employee_salaries (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  basic_salary numeric,
-  home_allowance numeric,
-  travel_allowance numeric,
-  mobile_allowance numeric,
-  commission numeric,
-  effective_date date,
-  created_at timestamp without time zone DEFAULT now(),
-  employee_id uuid,
-  CONSTRAINT employee_salaries_pkey PRIMARY KEY (id),
-  CONSTRAINT employee_salaries_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
-);
-CREATE TABLE public.employee_tax_tracker (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  year integer NOT NULL,
-  estimated_annual_income numeric NOT NULL,
-  annual_tax numeric NOT NULL,
-  tax_paid_to_date numeric DEFAULT 0,
-  remaining_tax numeric NOT NULL,
-  last_updated timestamp without time zone DEFAULT now(),
-  created_at timestamp without time zone DEFAULT now(),
-  employee_id uuid,
-  CONSTRAINT employee_tax_tracker_pkey PRIMARY KEY (id),
-  CONSTRAINT employee_tax_tracker_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
-);
 CREATE TABLE public.employees (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   name text,
@@ -70,80 +18,18 @@ CREATE TABLE public.employees (
   role_id uuid,
   manager_id uuid,
   is_admin boolean DEFAULT false,
+  last_seen_at timestamp with time zone,
+  verification_breaches integer DEFAULT 0,
+  verification_successes integer DEFAULT 0,
   CONSTRAINT employees_pkey PRIMARY KEY (id),
   CONSTRAINT employees_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id)
 );
-CREATE TABLE public.holidays (
+CREATE TABLE public.leave_types (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  holiday_date date NOT NULL UNIQUE,
+  name text NOT NULL UNIQUE,
+  yearly_quota integer NOT NULL CHECK (yearly_quota >= 0),
   created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT holidays_pkey PRIMARY KEY (id)
-);
-CREATE TABLE public.invoice_items (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  invoice_id uuid NOT NULL,
-  title text NOT NULL,
-  description text,
-  quantity numeric DEFAULT 1,
-  unit_price numeric DEFAULT 0,
-  total_price numeric DEFAULT 0,
-  CONSTRAINT invoice_items_pkey PRIMARY KEY (id),
-  CONSTRAINT invoice_items_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id)
-);
-CREATE TABLE public.invoice_payments (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  invoice_id uuid NOT NULL,
-  amount numeric NOT NULL,
-  payment_method text,
-  notes text,
-  payment_date date DEFAULT CURRENT_DATE,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT invoice_payments_pkey PRIMARY KEY (id),
-  CONSTRAINT invoice_payments_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id),
-  CONSTRAINT invoice_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
-);
-CREATE TABLE public.invoices (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  client_id uuid NOT NULL,
-  project_id uuid,
-  invoice_number text NOT NULL UNIQUE,
-  invoice_title text,
-  description text,
-  invoice_type text DEFAULT 'one_time'::text,
-  status text DEFAULT 'unpaid'::text,
-  invoice_date date NOT NULL,
-  due_date date,
-  currency text DEFAULT 'PKR'::text,
-  subtotal numeric DEFAULT 0,
-  tax_amount numeric DEFAULT 0,
-  discount_amount numeric DEFAULT 0,
-  total_amount numeric DEFAULT 0,
-  paid_amount numeric DEFAULT 0,
-  remaining_amount numeric DEFAULT 0,
-  is_recurring boolean DEFAULT false,
-  recurring_cycle text,
-  next_recurring_date date,
-  created_by uuid,
-  created_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT invoices_pkey PRIMARY KEY (id),
-  CONSTRAINT invoices_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
-  CONSTRAINT invoices_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
-  CONSTRAINT invoices_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
-);
-CREATE TABLE public.leave_audit_logs (
-  id uuid NOT NULL DEFAULT gen_random_uuid(),
-  leave_id uuid,
-  action text,
-  performed_by uuid,
-  old_status text,
-  new_status text,
-  comment text,
-  created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT leave_audit_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT leave_audit_logs_leave_id_fkey FOREIGN KEY (leave_id) REFERENCES public.leave_requests(id),
-  CONSTRAINT leave_audit_logs_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES auth.users(id)
+  CONSTRAINT leave_types_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.leave_requests (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -163,12 +49,34 @@ CREATE TABLE public.leave_requests (
   CONSTRAINT leave_requests_type_id_fkey FOREIGN KEY (type_id) REFERENCES public.leave_types(id),
   CONSTRAINT leave_requests_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
 );
-CREATE TABLE public.leave_types (
+CREATE TABLE public.leave_audit_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL UNIQUE,
-  yearly_quota integer NOT NULL CHECK (yearly_quota >= 0),
+  leave_id uuid,
+  action text,
+  performed_by uuid,
+  old_status text,
+  new_status text,
+  comment text,
   created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT leave_types_pkey PRIMARY KEY (id)
+  CONSTRAINT leave_audit_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT leave_audit_logs_leave_id_fkey FOREIGN KEY (leave_id) REFERENCES public.leave_requests(id),
+  CONSTRAINT leave_audit_logs_performed_by_fkey FOREIGN KEY (performed_by) REFERENCES auth.users(id)
+);
+CREATE TABLE public.holidays (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  holiday_date date NOT NULL UNIQUE,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT holidays_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.payroll_settings (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  cycle_start_day integer,
+  cycle_end_day integer,
+  salary_disbursement_day integer,
+  effective_from date,
+  created_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT payroll_settings_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.payroll (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -198,26 +106,53 @@ CREATE TABLE public.payroll (
   CONSTRAINT payroll_pkey PRIMARY KEY (id),
   CONSTRAINT payroll_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
 );
-CREATE TABLE public.payroll_settings (
+CREATE TABLE public.employee_salaries (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  cycle_start_day integer,
-  cycle_end_day integer,
-  salary_disbursement_day integer,
-  effective_from date,
+  basic_salary numeric,
+  home_allowance numeric,
+  travel_allowance numeric,
+  mobile_allowance numeric,
+  commission numeric,
+  effective_date date,
   created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT payroll_settings_pkey PRIMARY KEY (id)
+  employee_id uuid,
+  CONSTRAINT employee_salaries_pkey PRIMARY KEY (id),
+  CONSTRAINT employee_salaries_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
 );
-CREATE TABLE public.projects (
+CREATE TABLE public.employee_bank_details (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  name text NOT NULL,
-  description text,
-  created_by uuid,
-  status text DEFAULT 'active'::text,
+  account_title text,
+  bank_name text,
+  account_number text,
+  iban text,
+  is_active boolean DEFAULT true,
   created_at timestamp without time zone DEFAULT now(),
-  client_id uuid,
-  CONSTRAINT projects_pkey PRIMARY KEY (id),
-  CONSTRAINT projects_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id),
-  CONSTRAINT projects_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
+  employee_id uuid,
+  CONSTRAINT employee_bank_details_pkey PRIMARY KEY (id),
+  CONSTRAINT employee_bank_details_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
+);
+CREATE TABLE public.tax_slabs (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  min_income numeric NOT NULL,
+  max_income numeric,
+  tax_rate numeric NOT NULL,
+  effective_from date NOT NULL,
+  created_at timestamp without time zone DEFAULT now(),
+  effective_to date DEFAULT '2999-12-31'::date,
+  CONSTRAINT tax_slabs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.employee_tax_tracker (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  year integer NOT NULL,
+  estimated_annual_income numeric NOT NULL,
+  annual_tax numeric NOT NULL,
+  tax_paid_to_date numeric DEFAULT 0,
+  remaining_tax numeric NOT NULL,
+  last_updated timestamp without time zone DEFAULT now(),
+  created_at timestamp without time zone DEFAULT now(),
+  employee_id uuid,
+  CONSTRAINT employee_tax_tracker_pkey PRIMARY KEY (id),
+  CONSTRAINT employee_tax_tracker_employee_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
 );
 CREATE TABLE public.reimbursements (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -239,17 +174,17 @@ CREATE TABLE public.roles (
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT roles_pkey PRIMARY KEY (id)
 );
-CREATE TABLE public.task_logs (
+CREATE TABLE public.projects (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  task_id uuid,
-  employee_id uuid,
-  start_time timestamp with time zone NOT NULL,
-  end_time timestamp with time zone,
-  duration integer,
+  name text NOT NULL,
+  description text,
+  created_by uuid,
+  status text DEFAULT 'active'::text,
   created_at timestamp without time zone DEFAULT now(),
-  CONSTRAINT task_logs_pkey PRIMARY KEY (id),
-  CONSTRAINT task_logs_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
-  CONSTRAINT task_logs_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
+  client_id uuid,
+  CONSTRAINT projects_pkey PRIMARY KEY (id),
+  CONSTRAINT projects_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id),
+  CONSTRAINT projects_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id)
 );
 CREATE TABLE public.tasks (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -259,23 +194,228 @@ CREATE TABLE public.tasks (
   assigned_to uuid NOT NULL,
   assigned_by uuid NOT NULL,
   status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'in_progress'::text, 'review'::text, 'submitted'::text, 'closed'::text])),
+  created_at timestamp without time zone DEFAULT now(),
+  completed_at timestamp with time zone,
+  priority text DEFAULT 'medium'::text,
+  closed_at timestamp with time zone,
+  approval_status text NOT NULL DEFAULT 'approved'::text CHECK (approval_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])),
+  approved_by uuid,
+  approved_at timestamp with time zone,
+  next_verification_at timestamp with time zone,
   deadline date,
   allotted_hours integer DEFAULT 0,
-  created_at timestamp without time zone DEFAULT now(),
-  completed_at timestamp without time zone,
-  priority text DEFAULT 'medium'::text,
+  current_iteration_no integer DEFAULT 1,
+  original_allotted_hours numeric NOT NULL DEFAULT 0,
+  original_deadline date,
   CONSTRAINT tasks_pkey PRIMARY KEY (id),
   CONSTRAINT tasks_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
   CONSTRAINT tasks_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.employees(id),
-  CONSTRAINT tasks_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.employees(id)
+  CONSTRAINT tasks_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.employees(id),
+  CONSTRAINT tasks_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.employees(id)
 );
-CREATE TABLE public.tax_slabs (
+CREATE TABLE public.task_logs (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
-  min_income numeric NOT NULL,
-  max_income numeric,
-  tax_rate numeric NOT NULL,
-  effective_from date NOT NULL,
+  task_id uuid,
+  employee_id uuid,
+  start_time timestamp with time zone NOT NULL,
+  end_time timestamp with time zone,
+  duration integer,
   created_at timestamp without time zone DEFAULT now(),
-  effective_to date DEFAULT '2999-12-31'::date,
-  CONSTRAINT tax_slabs_pkey PRIMARY KEY (id)
+  iteration_id uuid,
+  stop_reason text,
+  verification_id uuid,
+  revision_no integer NOT NULL DEFAULT 0,
+  CONSTRAINT task_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT task_logs_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_logs_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id),
+  CONSTRAINT task_logs_iteration_id_fkey FOREIGN KEY (iteration_id) REFERENCES public.task_iterations(id)
+);
+CREATE TABLE public.clients (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  company_name text,
+  email text,
+  phone text,
+  address text,
+  notes text,
+  status text DEFAULT 'active'::text,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT clients_pkey PRIMARY KEY (id),
+  CONSTRAINT clients_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.invoices (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  client_id uuid NOT NULL,
+  project_id uuid,
+  invoice_number text NOT NULL UNIQUE,
+  invoice_title text,
+  description text,
+  invoice_type text DEFAULT 'one_time'::text,
+  status text DEFAULT 'unpaid'::text,
+  invoice_date date NOT NULL,
+  due_date date,
+  currency text DEFAULT 'PKR'::text,
+  subtotal numeric DEFAULT 0,
+  tax_amount numeric DEFAULT 0,
+  discount_amount numeric DEFAULT 0,
+  total_amount numeric DEFAULT 0,
+  paid_amount numeric DEFAULT 0,
+  remaining_amount numeric DEFAULT 0,
+  is_recurring boolean DEFAULT false,
+  recurring_cycle text,
+  next_recurring_date date,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT invoices_pkey PRIMARY KEY (id),
+  CONSTRAINT invoices_client_id_fkey FOREIGN KEY (client_id) REFERENCES public.clients(id),
+  CONSTRAINT invoices_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id),
+  CONSTRAINT invoices_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.invoice_items (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL,
+  title text NOT NULL,
+  description text,
+  quantity numeric DEFAULT 1,
+  unit_price numeric DEFAULT 0,
+  total_price numeric DEFAULT 0,
+  CONSTRAINT invoice_items_pkey PRIMARY KEY (id),
+  CONSTRAINT invoice_items_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id)
+);
+CREATE TABLE public.invoice_payments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  invoice_id uuid NOT NULL,
+  amount numeric NOT NULL,
+  payment_method text,
+  notes text,
+  payment_date date DEFAULT CURRENT_DATE,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT invoice_payments_pkey PRIMARY KEY (id),
+  CONSTRAINT invoice_payments_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.invoices(id),
+  CONSTRAINT invoice_payments_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.task_iterations (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  iteration_no integer NOT NULL,
+  status text NOT NULL DEFAULT 'planned'::text CHECK (status = ANY (ARRAY['planned'::text, 'working'::text, 'in_progress'::text, 'submitted'::text, 'revision_requested'::text, 'approved'::text])),
+  submitted_at timestamp with time zone,
+  reviewed_at timestamp with time zone,
+  review_notes text,
+  created_by uuid,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  reviewed_by uuid,
+  title text NOT NULL,
+  description text,
+  allotted_hours numeric NOT NULL DEFAULT 0,
+  deadline date,
+  revision_count integer NOT NULL DEFAULT 0,
+  started_at timestamp with time zone,
+  approved_at timestamp with time zone,
+  CONSTRAINT task_iterations_pkey PRIMARY KEY (id),
+  CONSTRAINT task_iterations_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_iterations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.employees(id),
+  CONSTRAINT task_iterations_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.task_comments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  iteration_id uuid,
+  employee_id uuid NOT NULL,
+  comment text NOT NULL,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT task_comments_pkey PRIMARY KEY (id),
+  CONSTRAINT task_comments_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_comments_iteration_id_fkey FOREIGN KEY (iteration_id) REFERENCES public.task_iterations(id),
+  CONSTRAINT task_comments_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
+);
+CREATE TABLE public.task_deadline_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  old_deadline date,
+  new_deadline date,
+  changed_by uuid,
+  reason text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT task_deadline_history_pkey PRIMARY KEY (id),
+  CONSTRAINT task_deadline_history_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_deadline_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.task_estimation_history (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  old_hours numeric,
+  new_hours numeric,
+  changed_by uuid,
+  reason text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT task_estimation_history_pkey PRIMARY KEY (id),
+  CONSTRAINT task_estimation_history_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_estimation_history_changed_by_fkey FOREIGN KEY (changed_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.task_edit_requests (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  task_id uuid NOT NULL,
+  request_type text NOT NULL,
+  old_deadline date,
+  requested_deadline date,
+  old_hours numeric,
+  requested_hours numeric,
+  reason text NOT NULL,
+  requested_by uuid NOT NULL,
+  reviewed_by uuid,
+  review_notes text,
+  status text DEFAULT 'pending'::text,
+  reviewed_at timestamp with time zone,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT task_edit_requests_pkey PRIMARY KEY (id),
+  CONSTRAINT task_edit_requests_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_edit_requests_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.employees(id),
+  CONSTRAINT task_edit_requests_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES public.employees(id)
+);
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL,
+  title text NOT NULL,
+  message text NOT NULL,
+  notification_type text NOT NULL,
+  entity_type text,
+  entity_id uuid,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id)
+);
+CREATE TABLE public.activity_verifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  task_log_id uuid,
+  verification_status text NOT NULL DEFAULT 'pending'::text,
+  generated_at timestamp with time zone NOT NULL DEFAULT now(),
+  expires_at timestamp with time zone NOT NULL,
+  responded_at timestamp with time zone,
+  response_type text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT activity_verifications_pkey PRIMARY KEY (id),
+  CONSTRAINT activity_verifications_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id),
+  CONSTRAINT activity_verifications_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT activity_verifications_task_log_id_fkey FOREIGN KEY (task_log_id) REFERENCES public.task_logs(id)
+);
+CREATE TABLE public.task_iteration_revisions (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  iteration_id uuid NOT NULL,
+  task_id uuid NOT NULL,
+  revision_no integer NOT NULL,
+  reason text NOT NULL,
+  requested_by uuid,
+  requested_at timestamp with time zone NOT NULL DEFAULT now(),
+  resubmitted_at timestamp with time zone,
+  resolved_at timestamp with time zone,
+  CONSTRAINT task_iteration_revisions_pkey PRIMARY KEY (id),
+  CONSTRAINT task_iteration_revisions_iteration_id_fkey FOREIGN KEY (iteration_id) REFERENCES public.task_iterations(id),
+  CONSTRAINT task_iteration_revisions_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id),
+  CONSTRAINT task_iteration_revisions_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.employees(id)
 );

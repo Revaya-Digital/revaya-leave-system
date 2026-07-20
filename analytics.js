@@ -29,6 +29,20 @@ const analyticsFilters = {
         return result.trim() || "0s";
     }
 
+    function deriveIterationTaskStats(tasks, iterations = null){
+        (tasks || []).forEach(task => {
+            const planned = (iterations || task.task_iterations || [])
+                .filter(i => !iterations || String(i.task_id) === String(task.id))
+                .sort((a,b)=>Number(a.iteration_no)-Number(b.iteration_no));
+            task.planned_iteration_count = planned.length;
+            if(!planned.length) return;
+            task.allotted_hours = planned.reduce((sum,i)=>sum+Number(i.allotted_hours||0),0);
+            task.deadline = planned.map(i=>i.deadline).filter(Boolean).sort().at(-1)||null;
+            task.revision_count = planned.reduce((sum,i)=>sum+Number(i.revision_count||0),0);
+        });
+        return tasks || [];
+    }
+
     function getAnalyticsDateRange(){
         const today = new Date();
         let startDate = new Date();
@@ -98,6 +112,26 @@ const analyticsFilters = {
         .from("task_logs")
         .select("*");
 
+        /* Iterations are the planning source of truth. Keep the task-shaped
+           analytics API, but derive its totals from the planned iterations. */
+        tasks.forEach(task => {
+            const planned = taskIterations
+                .filter(i => String(i.task_id) === String(task.id))
+                .sort((a,b) => Number(a.iteration_no) - Number(b.iteration_no));
+            if(!planned.length){
+                task.planned_iteration_count = 0;
+                task.on_time_iteration_count = 0;
+                task.breached_iteration_count = 0;
+                return;
+            }
+            task.planned_iteration_count = planned.length;
+            task.allotted_hours = planned.reduce((sum,i)=>sum + Number(i.allotted_hours || 0),0);
+            task.deadline = planned.map(i=>i.deadline).filter(Boolean).sort().at(-1) || null;
+            task.revision_count = planned.reduce((sum,i)=>sum + Number(i.revision_count || 0),0);
+            task.on_time_iteration_count = planned.filter(i => i.submitted_at && i.deadline && new Date(i.submitted_at) <= new Date(`${i.deadline}T23:59:59`)).length;
+            task.breached_iteration_count = planned.filter(i => i.submitted_at && i.deadline && new Date(i.submitted_at) > new Date(`${i.deadline}T23:59:59`)).length;
+        });
+
         let filteredTasks = [...tasks];
 
         filteredTasks = filteredTasks.filter(t => {
@@ -130,7 +164,7 @@ const analyticsFilters = {
         const dueToday = filteredTasks.filter(t => {if(!t.deadline) return false; const today = new Date().toISOString().split("T")[0]; return t.deadline === today;}).length;
 
         const closedTasksData = filteredTasks.filter(t => t.status?.toLowerCase() === "closed");
-        const totalIterations = closedTasksData.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const totalIterations = closedTasksData.reduce((sum, task) => sum + Number(task.planned_iteration_count || 0), 0);
         const totalRevisions = closedTasksData.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
         const firstPassTasks = closedTasksData.filter(t => Number(t.revision_count || 0) === 0).length;
         const avgIterations = closedTasksData.length > 0 ? (totalIterations / closedTasksData.length).toFixed(2) : 0;
@@ -300,18 +334,18 @@ const analyticsFilters = {
             }
 
             let taskTotalHours = 0;
-            let firstIterationHours = 0;
+            let revisionHours = 0;
 
             iterations.forEach((iteration,index) => {
                 const iterationHours = taskLogs.filter(log => String(log.iteration_id) === String(iteration.id)).reduce((sum,log) => sum + (Number(log.duration || 0) / 3600), 0);
                 taskTotalHours += iterationHours;
 
-                if(index === 0){
-                    firstIterationHours = iterationHours;
-                }
+                revisionHours += taskLogs
+                    .filter(log => String(log.iteration_id) === String(iteration.id) && Number(log.revision_no || 0) > 0)
+                    .reduce((sum,log) => sum + (Number(log.duration || 0) / 3600), 0);
             });
 
-            const reworkHours = Math.max(0, taskTotalHours - firstIterationHours);
+            const reworkHours = revisionHours;
 
             totalTrackedHours += taskTotalHours;
             totalReworkHours += reworkHours;
@@ -1024,8 +1058,10 @@ const analyticsFilters = {
 
         const { data: tasks } = await db
         .from("tasks")
-        .select("*")
+        .select("*,task_iterations(*)")
         .eq("assigned_to",employeeId);
+
+        deriveIterationTaskStats(tasks);
 
         const { data: logs } = await db
         .from("task_logs")
@@ -1054,7 +1090,7 @@ const analyticsFilters = {
         logs.forEach(log => {trackedHours += Number(log.duration || 0);});
 
         const efficiency = tasks.length > 0 ? Math.round((closedTasks.length / tasks.length) * 100) : 0;
-        const totalIterations = closedTasks.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const totalIterations = closedTasks.reduce((sum, task) => sum + Number(task.planned_iteration_count || 0), 0);
         const firstPassTasks = closedTasks.filter(t => Number(t.revision_count || 0) === 0).length;
         const totalRevisions = closedTasks.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
         const avgIterations = closedTasks.length > 0 ? (totalIterations / closedTasks.length).toFixed(2) : 0;
@@ -1158,8 +1194,10 @@ const analyticsFilters = {
 
         const { data: tasks } = await db
         .from("tasks")
-        .select("*")
+        .select("*,task_iterations(*)")
         .eq("project_id",projectId);
+
+        deriveIterationTaskStats(tasks);
 
         const { data: employees } = await db
         .from("employees")
@@ -1178,7 +1216,7 @@ const analyticsFilters = {
         const openTasks = tasks.filter(t => t.status?.toLowerCase() !== "closed");
         const overdueTasks = tasks.filter(t => {if(!t.deadline || t.status?.toLowerCase() === "closed"){return false;} return new Date(t.deadline) < new Date();});
         const completion = tasks.length > 0 ? Math.round((closedTasks.length / tasks.length) * 100) : 0;
-        const totalIterations = closedTasks.reduce((sum, task) => sum + (Number(task.revision_count || 0) + 1), 0);
+        const totalIterations = closedTasks.reduce((sum, task) => sum + Number(task.planned_iteration_count || 0), 0);
         const totalRevisions = closedTasks.reduce((sum, task) => sum + Number(task.revision_count || 0), 0);
         const revisedTasks = closedTasks.filter(t => Number(t.revision_count || 0) > 0).length;
         const avgIterations = closedTasks.length > 0 ? (totalIterations / closedTasks.length).toFixed(2) : 0;
@@ -1927,7 +1965,7 @@ const analyticsFilters = {
         };
 
         tasks.filter(t => t.status?.toLowerCase() === "closed").forEach(task => {
-            const iterations = Number(task.revision_count || 0) + 1;
+            const iterations = Number(task.planned_iteration_count || 0);
             if(iterations === 1){
                 distribution["1 Iteration"]++;
             }
@@ -1973,7 +2011,7 @@ const analyticsFilters = {
                     <td>${task.title}</td>
                     <td>${project?.name || "-"}</td>
                     <td>
-                        ${Number(task.revision_count || 0) + 1}
+                        ${Number(task.planned_iteration_count || 0)}
                     </td>
                     <td>
                         ${task.revision_count || 0}
@@ -2015,7 +2053,7 @@ const analyticsFilters = {
             stats[empId].closedTasks++;
 
             const revisions = Number(task.revision_count || 0);
-            stats[empId].totalIterations += revisions + 1;
+            stats[empId].totalIterations += Number(task.planned_iteration_count || 0);
 
             if(revisions > 0){
                 stats[empId].revisedTasks++;

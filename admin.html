@@ -1941,12 +1941,6 @@
         totalTaskSeconds += iterationSeconds;
       });
 
-      console.log("Task Iterations with total seconds:", iterations);
-      console.log("Total Task Seconds:", totalTaskSeconds);
-      console.log("Formatted Total Task Duration:", formatDuration(totalTaskSeconds));
-
-
-
       const modal = document.createElement("div");
       modal.className = "modal task-details-modal";
       modal.style.display = "flex";
@@ -2118,9 +2112,8 @@
         await db
         .from("tasks")
         .update({
-          current_iteration_no:nextIteration,
-          revision_count:
-          nextIteration - 1,
+          current_iteration_no: nextIteration,
+          revision_count: nextIteration - 1,
           status:"pending"})
         .eq("id",taskId);
 
@@ -3006,7 +2999,6 @@
       });
     }
 
-
     async function approveTaskEditRequest(requestId){
       try{
         showLoader("Approving Request...");
@@ -3406,7 +3398,7 @@
     async function openEditTaskModal(taskId){
       const { data: task, error } = await db
       .from("tasks")
-      .select("*")
+      .select(`*, task_iterations(*,task_logs(id))`)
       .eq("id",taskId)
       .single();
 
@@ -3503,6 +3495,12 @@
               </div>
             </div>
           </div>
+          <hr style="margin:20px 0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px">
+              <h4 style="margin:0"> Planned Iterations </h4>
+              <button type="button" onclick="IterationWorkflow.addPlanRow('adminIterationPlan')"> Add Iteration </button>
+          </div>
+          <div id="adminIterationPlan"></div>
           <div class="form-field" style="margin-top:15px">
             <label>Description</label>
             <textarea id="editTaskDesc" class="input-field" style="width:100%;max-width:100%;min-height:100px">
@@ -3521,6 +3519,23 @@
       `;
 
       document.body.appendChild(modal);
+      const container = document.getElementById("adminIterationPlan");
+      container.innerHTML = "";
+      (task.task_iterations || [])
+      .sort((a,b)=>a.iteration_no-b.iteration_no)
+      .forEach(i=>{
+        IterationWorkflow.addPlanRow(
+          "adminIterationPlan",
+          {
+            id: i.id,
+            title: i.title,
+            description: i.description,
+            allotted_hours: i.allotted_hours,
+            deadline: i.deadline,
+            canDelete: i.status === "planned" && (i.task_logs || []).length === 0
+          }
+        );
+      });
     }
 
     async function updateTask(taskId,btn){
@@ -3529,7 +3544,7 @@
       const empId = await getEmployeeId();
       const { data: existingTask, error: taskError } = await db
       .from("tasks")
-      .select("*")
+      .select(`*, task_iterations(*, task_logs(id))`)
       .eq("id", taskId)
       .single();
 
@@ -3547,6 +3562,17 @@
         return;
       }
 
+      const iterations = IterationWorkflow.collectIterationRows("adminIterationPlan");
+      const planError = IterationWorkflow.validatePlan(iterations);
+
+      if(planError){
+          hideLoader();
+          showToast(planError,"error");
+          btn.disabled = false;
+          return;
+      }
+
+      const existingIterations = existingTask.task_iterations || [];
       const payload = {
         project_id:document.getElementById("editTaskProject").value,
         assigned_to:document.getElementById("editTaskEmployee").value,
@@ -3607,6 +3633,107 @@
         btn.disabled = false;
         return;
       }
+
+      /* ===========================
+          SAVE ITERATIONS
+         =========================== */
+        const existingMap = new Map(
+            existingIterations.map(i => [i.id, i])
+        );
+
+        const editedIds = [];
+
+        /* UPDATE + INSERT */
+        for(const iteration of iterations){
+          console.log("Iteration", iteration);
+          console.log("Existing Map", existingMap);
+            if(iteration.id){
+                editedIds.push(iteration.id);
+                const old = existingMap.get(iteration.id);
+                console.log("Old", old);
+                if(
+                    Number(old.allotted_hours) !== Number(iteration.allotted_hours)
+                ){
+                    const { error } = await db
+                    .from("task_estimation_history")
+                    .insert({
+                        task_id:taskId,
+                        iteration_id:iteration.id,
+                        old_hours:old.allotted_hours,
+                        new_hours:iteration.allotted_hours,
+                        changed_by:empId,
+                        reason:"Admin updated iteration"
+                    });
+
+                    if(error) throw error;
+                }
+
+                if(old.deadline !== iteration.deadline){
+                    const { error } = await db
+                    .from("task_deadline_history")
+                    .insert({
+                        task_id:taskId,
+                        iteration_id:iteration.id,
+                        old_deadline:old.deadline,
+                        new_deadline:iteration.deadline,
+                        changed_by:empId,
+                        reason:"Admin updated iteration"
+                    });
+
+                    if(error) throw error;
+                }
+
+                const { error } = await db
+                .from("task_iterations")
+                .update({
+                    iteration_no:iteration.iteration_no,
+                    title:iteration.title,
+                    description:iteration.description,
+                    allotted_hours:iteration.allotted_hours,
+                    deadline:iteration.deadline
+                })
+                .eq("id",iteration.id);
+                if(error) throw error;
+            }
+
+            else{
+                const { error } = await db
+                .from("task_iterations")
+                .insert({
+                    task_id:taskId,
+                    iteration_no:iteration.iteration_no,
+                    title:iteration.title,
+                    description:iteration.description,
+                    allotted_hours:iteration.allotted_hours,
+                    deadline:iteration.deadline,
+                    revision_count:0,
+                    status:"planned",
+                    created_by:empId
+                });
+
+                if(error) throw error;
+            }
+        }
+
+        /* DELETE REMOVED */
+        for(const old of existingIterations){
+            if(editedIds.includes(old.id))
+                continue;
+
+            if(
+                old.status !== "planned"
+                ||
+                (old.task_logs || []).length > 0
+            )
+                continue;
+
+            const { error } = await db
+            .from("task_iterations")
+            .delete()
+            .eq("id",old.id);
+
+            if(error) throw error;
+        }
 
       hideLoader();
       btn.closest(".modal").remove();
@@ -5137,6 +5264,9 @@
     checkAdminAuth()
     openPage("dashboard");
     </script>
+
+    <script src="iteration_workflow.js"></script>
+    <script src="admin_iteration_workflow.js"></script>
 
     <div id="toastContainer"></div>
 
