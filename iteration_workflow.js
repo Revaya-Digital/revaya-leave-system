@@ -46,7 +46,7 @@
   function collectIterationRows(containerId){
     const rows = [...document.querySelectorAll(`#${containerId} .iteration-plan-row`)];
     return rows.map((row,index)=>({
-      id: row.dataset.id || null,
+      ...(row.dataset.id ? { id: row.dataset.id } : {}),
       iteration_no:index + 1,
       title:row.querySelector('[data-field="title"]').value.trim(),
       description:row.querySelector('[data-field="description"]').value.trim(),
