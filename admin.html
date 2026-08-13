@@ -4384,61 +4384,104 @@
       return month >= 7 ? year + 1 : year
     }
 
-    async function estimateAnnualIncome(empId, currentMonthSalary, taxYear, periodStartDate){
-      const { data: payrolls } = await db
-      .from("payroll")
-      .select("gross_salary")
-      .eq("employee_id",empId)
-      .eq("tax_year",taxYear)
-
-      let ytd = 0
-
-      payrolls.forEach(p=>{
-        ytd += Number(p.gross_salary || 0)
-      })
-
+    async function estimateAnnualIncome(empId, currentGrossSalary, normalMonthlySalary, taxYear, periodStartDate) {
+      
       const payrollDate = new Date(periodStartDate)
       const month = payrollDate.getMonth() + 1
+
       let monthsPassed
 
-      if(month >= 7){
+      if (month >= 7) {
         monthsPassed = month - 6
-      }else{
+      } else {
         monthsPassed = month + 6
       }
 
-      const remainingMonths = 12 - monthsPassed + 1
-      const projected = currentMonthSalary * remainingMonths
+      const { data: payrolls, error } = await db
+        .from("payroll")
+        .select("gross_salary, period_start, period_end, tax_year")
+        .eq("employee_id", empId)
+        .eq("tax_year", taxYear)
 
-      return ytd + projected
+      if (error) {
+        showToast(error, "error")
+        return currentGrossSalary
+      }
+
+      let ytd = 0
+
+      if (payrolls) {
+        payrolls.forEach(p => {
+          const payrollStart = new Date(p.period_start)
+          const isJulyTransition = payrollStart.getFullYear() === 2026 && payrollStart.getMonth() === 6 && payrollStart.getDate() === 15
+
+          if (isJulyTransition) {
+            ytd += Number(normalMonthlySalary || 0)
+          } 
+          else {
+            ytd += Number(p.gross_salary || 0)
+          }
+        })
+      }
+
+      const currentAlreadyExists = payrolls?.some(p => p.period_start === periodStartDate)
+
+      if (!currentAlreadyExists) {
+        ytd += Number(currentGrossSalary || 0)
+      }
+
+      const remainingMonths = 12 - monthsPassed
+      const futureIncome = Number(normalMonthlySalary || 0) * remainingMonths
+      const annualIncome = ytd + futureIncome
+
+      return Number(annualIncome.toFixed(2))
     }
 
-    async function calculateTax(annualIncome){
-      const today = new Date().toISOString().split("T")[0]
-      const { data: slabs } = await db
-      .from("tax_slabs")
-      .select("*")
-      .lte("effective_from",today)
-      .gte("effective_to",today)
-      .order("min_income",{ascending:true})
+
+
+    async function calculateTax(annualIncome, effectiveDate){
+      const taxDate = new Date(effectiveDate)
+        .toISOString()
+        .split("T")[0]
+
+      const { data: slabs, error } = await db
+        .from("tax_slabs")
+        .select("*")
+        .lte("effective_from", taxDate)
+        .gte("effective_to", taxDate)
+        .order("min_income", { ascending: true })
+
+      if(error){
+        showToast(error, "error")
+        return {tax: 0, breakdown: []}
+      }
 
       let tax = 0
-      let breakdown = []
+      const breakdown = []
 
       for(const slab of slabs){
-        if(annualIncome <= slab.min_income) break
+        const lower = Number(slab.min_income)
+        const upper = slab.max_income !== null ? Number(slab.max_income) : annualIncome
 
-        const upper = slab.max_income || annualIncome
-        const taxable = Math.min(annualIncome, upper) - slab.min_income
+        if(annualIncome <= lower){
+          break
+        }
 
-        if(taxable <= 0) continue
+        const taxableAmount = Math.min(annualIncome, upper) - lower
 
-        const slabTax = taxable * slab.tax_rate
+        if(taxableAmount <= 0){
+          continue
+        }
+
+        const slabTax = taxableAmount * Number(slab.tax_rate)
+
         tax += slabTax
+
         breakdown.push({
-          min: slab.min_income,
+          min: lower,
           max: slab.max_income,
-          rate: slab.tax_rate,
+          rate: Number(slab.tax_rate),
+          taxable: taxableAmount,
           tax: slabTax
         })
       }
@@ -4463,23 +4506,36 @@
       return paid
     }
 
-    async function calculatePayrollPeriod(){
-      const { data: settings } = await db
-      .from("payroll_settings")
-      .select("*")
-      .order("created_at",{ascending:false})
-      .limit(1)
-      .single()
+    function formatLocalDate(date) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
 
-      const today = new Date()
-      let start = new Date(today.getFullYear(),today.getMonth()-1,settings.cycle_start_day)
-      let end = new Date(today.getFullYear(),today.getMonth(),settings.cycle_end_day)
-
-      return {
-        start:start.toISOString().split("T")[0],
-        end:end.toISOString().split("T")[0]
-      }
+      return `${year}-${month}-${day}`
     }
+
+    async function calculatePayrollPeriod(targetDate = new Date()){
+      const year = targetDate.getFullYear()
+      const month = targetDate.getMonth()
+
+        if(year === 2026 && month === 6){
+
+          return {
+            start: "2026-07-15",
+            end: "2026-07-31",
+            type: "transition"
+          }
+        }
+
+        const start = new Date(year, month, 1)
+        const end = new Date(year, month + 1, 0)
+
+        return {
+          start: formatLocalDate(start),
+          end: formatLocalDate(end),
+          type: "monthly"
+        }
+      }
 
     async function calculateUnpaidLeaves(empId,start,end){
       start = new Date(start).toISOString().split("T")[0]
@@ -4545,94 +4601,124 @@
       return data.length > 0
     }
 
-    async function generatePayroll(){
-      const period = await calculatePayrollPeriod()
+    async function generatePayroll(targetDate = new Date()) {
+      const period = await calculatePayrollPeriod(targetDate)
       const exists = await payrollAlreadyGenerated(period.start)
 
-      if(exists){
-        showToast("Payroll already generated for this period","error")
+      if (exists) {
+        showToast("Payroll already generated for this period", "error")
         return
       }
 
-      const monthName = new Date(period.start).toLocaleString('default',{month:'long',year:'numeric'})
+      const monthName = new Date(period.start).toLocaleString("default", {month: "long", year: "numeric"})
       const { data: employees, error } = await db
-      .from("employees")
-      .select("*")
-      .in("status",["active","resigned"])
+        .from("employees")
+        .select("*")
+        .in("status", ["active", "resigned"])
 
-      for(const emp of employees){
-        /* skip if joined after payroll period */
-        if(emp.joining_date && emp.joining_date > period.end){
+      if (error) {
+        showToast(error.message, "error")
+        return
+      }
+
+      for (const emp of employees) {
+        /* Skip employees who joined after payroll period */
+        if (emp.joining_date && emp.joining_date > period.end
+        ) {
           continue
         }
 
-        /* skip if resigned before payroll period */
-        if(emp.resignation_date && emp.resignation_date < period.start){
+        /* Skip employees who resigned before payroll period */
+        if (emp.resignation_date && emp.resignation_date < period.start
+        ) {
           continue
         }
 
-        /* salary fetch */
-        const salary = await getEmployeeSalary(emp.id,period.end)
+        const salary = await getEmployeeSalary(emp.id, period.end)
 
-        if(!salary) continue
+        if (!salary) {
+          continue
+        }
 
-        const basic = salary.basic_salary || 0
-        const home = salary.home_allowance || 0
-        const travel = salary.travel_allowance || 0
-        const mobile = salary.mobile_allowance || 0
-        const commission = salary.commission || 0
+        const basic = Number(salary.basic_salary || 0)
+        const home = Number(salary.home_allowance || 0)
+        const travel = Number(salary.travel_allowance || 0)
+        const mobile = Number(salary.mobile_allowance || 0)
+        const commission = Number(salary.commission || 0)
         const allowances = Number((home + travel + mobile + commission).toFixed(2))
+        const normalMonthlySalary = Number((basic + allowances).toFixed(2))
 
-        /* actual work start */
-        const workStart = getActualWorkStart(emp.joining_date,period.start)
+        let workedDays = 0
+        let unpaid = 0
+        let deduction = 0
+        let grossSalary = 0
 
-        /* working days */
-        const totalDays = calculateWorkingDays(period.start,period.end)
-        const workEnd = getActualWorkEnd(emp.resignation_date,period.end)
-        const workedDays = calculateWorkingDays(workStart,workEnd)
+        console.log("========== PAYROLL DEBUG ==========")
+        console.log("period.start:", period.start)
+        console.log("period.end:", period.end)
+        console.log("start type:", typeof period.start)
+        console.log("end type:", typeof period.end)
 
-        /* unpaid leaves */
-        const unpaid = await calculateUnpaidLeaves(emp.id,workStart,workEnd)
+        const isJulyTransition = period.type === "transition"
 
-        /* salary calculation */
-        const dailyRate = Number((basic / totalDays).toFixed(2))
-        const deduction = Number((dailyRate * unpaid).toFixed(2))
-        const earnedSalary = Number((dailyRate * workedDays).toFixed(2))
+        console.log("isJulyTransition:", isJulyTransition)
+        console.log("normalMonthlySalary:", normalMonthlySalary)
+        console.log("===================================")
 
-        // const finalSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
-        const grossSalary = Number((earnedSalary + allowances - deduction).toFixed(2))
+        if (isJulyTransition) {
+          console.log("🔥 JULY TRANSITION BRANCH EXECUTED")
+
+          grossSalary = Number((normalMonthlySalary / 2).toFixed(2))
+
+          console.log("July grossSalary:", grossSalary)
+        } 
+        else {
+          console.log("⚠️ NORMAL WORKING DAYS BRANCH EXECUTED")
+
+          const periodDate = new Date(period.start)
+          const salaryMonthStart = new Date(periodDate.getFullYear(), periodDate.getMonth(), 1)
+          const salaryMonthEnd = new Date(periodDate.getFullYear(), periodDate.getMonth() + 1, 0)
+          const totalDays = calculateWorkingDays(salaryMonthStart, salaryMonthEnd)
+          const workStart = getActualWorkStart(emp.joining_date, period.start)
+          const workEnd = getActualWorkEnd(emp.resignation_date, period.end)
+
+          workedDays = calculateWorkingDays(workStart, workEnd)
+          unpaid = await calculateUnpaidLeaves(emp.id, workStart, workEnd)
+
+          const dailyRate = Number((basic / totalDays).toFixed(2))
+          deduction = Number((dailyRate * unpaid).toFixed(2))
+
+          const earnedBasicSalary = Number((dailyRate * workedDays).toFixed(2))
+          grossSalary = Number((earnedBasicSalary + allowances - deduction).toFixed(2))
+        }
+
         const taxYear = getTaxYear(period.start)
+        let annualIncome
 
-        /* annual projection */
-        const annualIncome = await estimateAnnualIncome(emp.id, grossSalary, taxYear, period.start)
+        if (isJulyTransition) {
+          annualIncome = Number((normalMonthlySalary * 12).toFixed(2))
+        } 
+        else {
+          annualIncome = await estimateAnnualIncome(emp.id, grossSalary, normalMonthlySalary, taxYear, period.start)
+        }
 
-        /* total tax liability */
-        const taxResult = await calculateTax(annualIncome)
+        const taxResult = await calculateTax(annualIncome, period.start)
         const annualTax = taxResult.tax
-
-        /* already deducted */
         const taxPaid = await getTaxPaid(emp.id, taxYear)
-
-        /* remaining months */
+        const remainingTax = Math.max(0, annualTax - taxPaid)
         const payrollDate = new Date(period.start)
         const month = payrollDate.getMonth() + 1
 
         let monthsPassed
 
-        if(month >= 7){
+        if (month >= 7) {
           monthsPassed = month - 6
-        }else{
+        } else {
           monthsPassed = month + 6
         }
 
         const remainingMonths = 12 - monthsPassed + 1
 
-        /* 🔥 BALANCING */
-        let remainingTax = annualTax - taxPaid
-
-        if(remainingTax < 0){
-          remainingTax = 0
-        }
 
         const monthlyTax = Number((remainingTax / remainingMonths).toFixed(2))
         const netSalary = Number((grossSalary - monthlyTax).toFixed(2))
@@ -4645,38 +4731,44 @@
           breakdown: taxResult.breakdown
         }
 
-        /* save payroll */
+        const { error: insertError } =
+          await db
+            .from("payroll")
+            .insert({
+              employee_id: emp.id,
+              payroll_month: monthName,
+              period_start: period.start,
+              period_end: period.end,
+              basic_salary: basic,
+              home_allowance: home,
+              travel_allowance: travel,
+              mobile_allowance: mobile,
+              commission: commission,
+              worked_days: workedDays,
+              unpaid_leaves: unpaid,
+              deduction: deduction,
+              gross_salary: grossSalary,
+              tax_amount: monthlyTax,
+              net_salary: netSalary,
+              annual_income_estimate: annualIncome,
+              annual_tax: annualTax,
+              tax_year: taxYear,
+              tax_snapshot: taxSnapshot
+            })
 
-        await db.from("payroll").insert({
-          employee_id:emp.id,
-          payroll_month:monthName,
-          period_start:period.start,
-          period_end:period.end,
-          basic_salary:basic,
-          home_allowance:home,
-          travel_allowance:travel,
-          mobile_allowance:mobile,
-          commission:commission,
-          worked_days:workedDays,
-          unpaid_leaves:unpaid,
+        if (insertError) {
+          console.error("Payroll insert error:", insertError)
 
-          deduction:deduction,
-
-          // final_salary:finalSalary
-          gross_salary:grossSalary,
-          tax_amount:monthlyTax,
-          net_salary:netSalary,
-          annual_income_estimate:annualIncome,
-          annual_tax:annualTax,
-          tax_year:taxYear,
-          tax_snapshot:taxSnapshot
-        })
+          showToast(insertError.message, "error")
+          return
+        }
       }
 
-      showToast("Payroll generated successfully","success")
+      showToast("Payroll generated successfully", "success")
+
       renderPayrollPage()
     }
-
+    
     async function uploadSalaryProof(payrollId,file){
       const filePath = `salary-proofs/${Date.now()}_${file.name}`
       const { error } = await db.storage
